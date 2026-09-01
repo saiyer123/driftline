@@ -29,15 +29,26 @@ log = logging.getLogger(__name__)
 
 class TradingEngine:
     def __init__(self, bus: EventBus, portfolio: Portfolio, gate: RiskGate,
-                 broker, strategies: list[Strategy]):
+                 broker, strategies: list[Strategy], armed: bool = True):
         self.bus = bus
         self.portfolio = portfolio
         self.gate = gate
         self.broker = broker
         self.strategies = strategies
+        # While not armed (live-mode backfill warm-up), strategies see bars and
+        # build state but their OrderIntents are dropped — historical bars must
+        # never produce real orders.
+        self.armed = armed
         self._halt_announced = False
         bus.subscribe(MarketBar, self.on_bar)
         bus.subscribe(Fill, self.on_fill)
+
+    def arm(self) -> None:
+        """End warm-up: allow trading and let strategies reset their cadence."""
+        self.armed = True
+        for s in self.strategies:
+            s.on_go_live()
+        log.info("engine armed: strategies now trade on fresh bars")
 
     async def on_bar(self, event: Event) -> None:
         bar: MarketBar = event  # type: ignore[assignment]
@@ -54,6 +65,9 @@ class TradingEngine:
                     await self.bus.publish(out)
 
     async def _handle_intent(self, intent: OrderIntent) -> None:
+        if not self.armed:
+            log.debug("warm-up: dropped %s %s %s", intent.side.value, intent.qty, intent.symbol)
+            return
         price = self._price_for(intent.symbol)
         decision = self.gate.check(intent, price, now=intent.ts)
         if not decision.allowed:

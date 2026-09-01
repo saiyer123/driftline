@@ -42,3 +42,8 @@ class Strategy(ABC):
     @abstractmethod
     def on_bar(self, bar: MarketBar) -> list[Event]:
         """React to a market bar; return OrderIntents / JournalEntries to publish."""
+
+    def on_go_live(self) -> None:
+        """Called when warm-up ends and trading arms; reset cadence state so the
+        strategy may act on the next fresh bar instead of waiting out a
+        rebalance interval that elapsed inside historical data."""

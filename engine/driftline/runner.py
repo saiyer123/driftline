@@ -80,7 +80,8 @@ async def run_live() -> None:
             symbol=symbol, qty=d["qty"], avg_entry=d["avg_entry"], mark=d["mark"]
         )
 
-    engine = TradingEngine(bus, portfolio, gate, broker, [BaselineMomentum(portfolio)])
+    engine = TradingEngine(bus, portfolio, gate, broker, [BaselineMomentum(portfolio)],
+                           armed=False)  # warm-up: no orders from historical bars
     feed = AlpacaFeed(settings, bus, UNIVERSE)
     reconciler = Reconciler(bus, portfolio, gate, broker)
     app = build_app(bus, repo, portfolio, gate)
@@ -89,10 +90,15 @@ async def run_live() -> None:
     log.info("driftline live paper mode: equity $%.2f, %d position(s); API on http://%s:%d",
              state["equity"], len(state["positions"]), settings.api_host, settings.api_port)
 
+    adopted = await broker.adopt_open_orders()
+    if adopted:
+        log.info("tracking %d open order(s) from a previous run", adopted)
     await feed.backfill()
+    engine.arm()
     await engine.publish_snapshots()
     await asyncio.gather(
         feed.poll_forever(),
+        broker.poll_open_orders_forever(bus),
         engine.snapshot_forever(),
         reconciler.run_forever(),
         server.serve(),

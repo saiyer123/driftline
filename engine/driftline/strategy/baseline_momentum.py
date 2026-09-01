@@ -54,6 +54,9 @@ class BaselineMomentum(Strategy):
         self._last_rebalance = bar_date
         return self._rebalance(bar_date, bar.bar_ts)
 
+    def on_go_live(self) -> None:
+        self._last_rebalance = None  # rebalance on the first fresh daily bar
+
     def _should_rebalance(self, d: date) -> bool:
         if self._last_rebalance is None:
             return True

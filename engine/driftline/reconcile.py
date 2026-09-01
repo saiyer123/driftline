@@ -38,6 +38,9 @@ class Reconciler:
                 log.exception("reconcile pass failed; will retry")
 
     async def check_once(self) -> list[str]:
+        if getattr(self.broker, "has_open_orders", False):
+            log.info("reconcile skipped: orders in flight (fills may not be ingested yet)")
+            return []
         broker_state = await self.broker.account_state()
         problems: list[str] = []
 
