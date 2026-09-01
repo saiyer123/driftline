@@ -1,0 +1,14 @@
+.env
+*.db
+*.db-wal
+*.db-shm
+events.jsonl
+KILL
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+node_modules/
+.next/
+dist/
+.DS_Store

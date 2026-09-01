@@ -1,0 +1,471 @@
+<title>Driftline</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  :root {
+    --bg: #F6F7F5;
+    --surface: #FFFFFF;
+    --surface-2: #EEF1EE;
+    --ink: #1B2420;
+    --muted: #5A6660;
+    --line: #D8DDD8;
+    --accent: #0F6B4E;
+    --accent-soft: #E3EEE8;
+    --danger: #A93F35;
+    --danger-soft: #F3E6E3;
+    --amber: #8A6A1F;
+    --amber-soft: #F2ECDC;
+  }
+  :root:not([data-theme="light"]) { }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0F1513;
+      --surface: #161D1A;
+      --surface-2: #1C2521;
+      --ink: #E2E8E4;
+      --muted: #94A19A;
+      --line: #2A3530;
+      --accent: #41A487;
+      --accent-soft: #1A2E27;
+      --danger: #D07A6F;
+      --danger-soft: #33201D;
+      --amber: #CBA84E;
+      --amber-soft: #2E2817;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0F1513;
+    --surface: #161D1A;
+    --surface-2: #1C2521;
+    --ink: #E2E8E4;
+    --muted: #94A19A;
+    --line: #2A3530;
+    --accent: #41A487;
+    --accent-soft: #1A2E27;
+    --danger: #D07A6F;
+    --danger-soft: #33201D;
+    --amber: #CBA84E;
+    --amber-soft: #2E2817;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "IBM Plex Sans", -apple-system, "Segoe UI", sans-serif;
+    font-size: 16px;
+    line-height: 1.65;
+    margin: 0;
+    padding: 0 20px 96px;
+  }
+  .col { max-width: 76ch; margin: 0 auto; }
+  .wide { max-width: 980px; margin: 0 auto; }
+
+  header.masthead { padding: 72px 0 40px; border-bottom: 1px solid var(--line); }
+  .eyebrow {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 12px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--accent);
+    font-weight: 500;
+  }
+  h1 {
+    font-family: "Newsreader", Georgia, serif;
+    font-weight: 500;
+    font-size: clamp(40px, 6vw, 64px);
+    line-height: 1.05;
+    margin: 12px 0 16px;
+    text-wrap: balance;
+  }
+  .subtitle { font-size: 18px; color: var(--muted); max-width: 60ch; margin: 0; }
+  .meta {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 12px; color: var(--muted);
+    margin-top: 24px; display: flex; gap: 24px; flex-wrap: wrap;
+  }
+
+  section { padding-top: 56px; }
+  h2 {
+    font-family: "Newsreader", Georgia, serif;
+    font-weight: 600;
+    font-size: 30px;
+    line-height: 1.2;
+    margin: 8px 0 16px;
+    text-wrap: balance;
+  }
+  h3 {
+    font-family: "IBM Plex Sans", sans-serif;
+    font-size: 17px; font-weight: 600;
+    margin: 32px 0 8px;
+  }
+  p { margin: 0 0 16px; }
+  a { color: var(--accent); text-decoration-thickness: 1px; text-underline-offset: 3px; }
+  strong { font-weight: 600; }
+  ul { margin: 0 0 16px; padding-left: 22px; }
+  li { margin-bottom: 8px; }
+  .muted { color: var(--muted); }
+
+  .verdict {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--accent);
+    border-radius: 4px;
+    padding: 28px 32px;
+    margin: 40px auto 0;
+  }
+  .verdict h2 { margin-top: 0; font-size: 24px; }
+  .verdict ol { margin: 0; padding-left: 22px; }
+  .verdict li { margin-bottom: 10px; }
+
+  .callout {
+    background: var(--amber-soft);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 18px 22px;
+    margin: 24px 0;
+    font-size: 15px;
+  }
+  .callout.red { background: var(--danger-soft); }
+  .callout .lbl {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase;
+    font-weight: 500; display: block; margin-bottom: 6px;
+  }
+  .callout.red .lbl { color: var(--danger); }
+  .callout .lbl { color: var(--amber); }
+
+  .tablewrap { overflow-x: auto; margin: 24px 0; border: 1px solid var(--line); border-radius: 4px; background: var(--surface); }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; min-width: 640px; }
+  th {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase;
+    text-align: left; font-weight: 500; color: var(--muted);
+    padding: 12px 16px; border-bottom: 1px solid var(--line);
+    background: var(--surface-2);
+    white-space: nowrap;
+  }
+  td { padding: 12px 16px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  tr:last-child td { border-bottom: none; }
+  td.num { font-family: "IBM Plex Mono", ui-monospace, monospace; font-variant-numeric: tabular-nums; font-size: 13px; white-space: nowrap; }
+  .rank {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-weight: 500; color: var(--accent); white-space: nowrap;
+  }
+  .tag {
+    display: inline-block; font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 11px; letter-spacing: 0.06em; padding: 2px 8px; border-radius: 3px;
+    background: var(--accent-soft); color: var(--accent); white-space: nowrap;
+  }
+  .tag.bad { background: var(--danger-soft); color: var(--danger); }
+  .tag.warn { background: var(--amber-soft); color: var(--amber); }
+
+  /* architecture diagram */
+  .diagram { margin: 32px 0; display: flex; flex-direction: column; gap: 0; }
+  .plane {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 20px 24px;
+  }
+  .plane .plabel {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--muted); font-weight: 500; margin-bottom: 12px;
+  }
+  .plane.hot { border-left: 3px solid var(--accent); }
+  .plane.cog { border-left: 3px solid var(--amber); }
+  .plane.obs { border-left: 3px solid var(--line); }
+  .nodes { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  .node {
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 8px 14px;
+    font-size: 13.5px;
+    font-weight: 500;
+  }
+  .node small { display: block; font-weight: 400; color: var(--muted); font-size: 12px; }
+  .node.risk { border-color: var(--danger); }
+  .arrow {
+    color: var(--muted);
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 13px;
+    flex: none;
+  }
+  .connector {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 0 8px 32px;
+    color: var(--muted);
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 12px;
+  }
+  .connector::before { content: "│"; color: var(--line); }
+
+  .phases { counter-reset: ph; display: flex; flex-direction: column; gap: 14px; margin: 24px 0; padding: 0; list-style: none; }
+  .phase {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 18px 22px 18px 64px;
+    position: relative;
+  }
+  .phase::before {
+    counter-increment: ph;
+    content: counter(ph, decimal-leading-zero);
+    position: absolute; left: 20px; top: 20px;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 13px; color: var(--accent); font-weight: 500;
+  }
+  .phase h3 { margin: 0 0 6px; font-size: 16px; }
+  .phase p { margin: 0; font-size: 14.5px; color: var(--muted); }
+  .phase .gate {
+    margin-top: 10px; font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 12px; color: var(--accent);
+  }
+
+  .srcs { font-size: 13.5px; color: var(--muted); }
+  .srcs li { margin-bottom: 4px; }
+  footer { margin-top: 72px; padding-top: 24px; border-top: 1px solid var(--line); font-size: 13px; color: var(--muted); }
+
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+</style>
+
+<div class="col">
+  <header class="masthead">
+    <div class="eyebrow">Research brief · 2026-09-01</div>
+    <h1>Driftline</h1>
+    <p class="subtitle">A Claude-powered swing-trading platform: what others have built, the architecture that survives contact with real markets, and where an LLM actually earns its keep.</p>
+    <div class="meta">
+      <span>3 research streams · ~50 sources</span>
+      <span>Status: pre-build synthesis</span>
+    </div>
+  </header>
+
+  <div class="verdict">
+    <div class="eyebrow">The verdict</div>
+    <h2>Claude the engineer, not Claude the gambler</h2>
+    <ol>
+      <li><strong>Trade slow, read deep.</strong> Swing trading US equities/ETFs over days–weeks, driven by an event-driven signal engine (earnings calls, filings, news catalysts). This is the one style where every constraint — LLM latency, retail data budgets, broker access, and the published evidence on LLM edge — points the same way.</li>
+      <li><strong>The LLM authors strategies and reads text; deterministic code trades.</strong> Every credible production system uses this split. Every "let the LLM trade tick-by-tick" experiment with real money mostly lost it.</li>
+      <li><strong>Three-plane architecture:</strong> a deterministic execution core with hard risk rails Claude cannot override, an async Claude cognition plane (research, strategy authoring, regime reading, post-mortems), and an event-sourced ledger feeding the live P&amp;L dashboard.</li>
+      <li><strong>Paper first, promotion gates always.</strong> Backtest gate → paper soak → small live capital → scale, with strategy changes shipped as reviewable pull requests.</li>
+    </ol>
+  </div>
+
+  <section>
+    <div class="eyebrow">Part I · The landscape</div>
+    <h2>What people are actually doing</h2>
+    <p>The public record splits into three tiers: real-money autonomy experiments (mostly cautionary), engineering-first production systems (the success stories), and open-source reference frameworks (great scaffolding, simulation-only).</p>
+
+    <h3>Real-money autonomy: the cautionary tier</h3>
+    <p><strong>Alpha Arena</strong> (Nof1.ai) gave six frontier LLMs $10,000 each to trade crypto perpetuals autonomously on Hyperliquid in late 2025. Four of six lost money; win rates ran 25–30% across all models; organizers reported early P&amp;L was <em>dominated by trading costs</em> from overtrading, with one model paying $1,654 in fees on a $10K account in two weeks. Their conclusion: LLMs "don't really handle numerical time series data very well." Individual experiments rhyme with this — a well-documented Claude Code paper-trading bot beat the S&amp;P over a month (+7% vs +4.5%) but with 22% drawdowns, and its author still refuses to fund it with real money.</p>
+
+    <h3>Production systems: the engineering tier</h3>
+    <p>The best-documented system running real money 24/7 is a Polymarket arbitrage bot ("Polyphemus"): 36,000 lines of code written and maintained entirely by Claude Code over four months, 99.2% uptime, ~$136/month in API costs. Its defining design decision: <strong>Claude makes zero live trading decisions.</strong> Deterministic thresholds trade; risk limits are human-owned constraints the agent cannot edit; Claude-generated code passes a two-gate review and shadow-mode deployment before touching capital (which cut its error rate ~6×, catching 8 silent bugs).</p>
+
+    <h3>Reference frameworks</h3>
+    <p><strong>virattt/ai-hedge-fund</strong> (~63K stars) and the <strong>TradingAgents</strong> paper define the multi-agent pattern: persona analysts (fundamentals, sentiment, technicals, valuation), bull-vs-bear researcher debate, a trader agent, and a risk manager that can veto. Both are simulation-only, and a 2026 reproducibility survey of 19 LLM-trading studies found essentially none fully reproducible — the <em>architecture patterns</em> are the durable contribution, not the published returns.</p>
+
+    <h3>The plumbing has standardized</h3>
+    <p>MCP servers are now the glue between Claude and brokers: Alpaca ships an official one (free, API-identical paper trading), ccxt ships one for 100+ crypto exchanges (opt-in trading tier, notional caps, local keys), and half a dozen community servers cover Interactive Brokers. The convention everywhere: read-only by default, capped and confirmed trading opt-in.</p>
+
+    <div class="callout red">
+      <span class="lbl">The trap unique to LLM backtests</span>
+      <strong>Parametric look-ahead bias.</strong> A model trained through 2025 <em>remembers</em> what happened to markets before its cutoff, so any backtest with an LLM in the loop over pre-cutoff data is contaminated. Rigorous 20-year evaluations (FINSABER, KDD 2026; StockBench) find reported LLM trading advantages largely evaporate under honest testing. The only benchmark that counts is your own forward paper-trading record.
+    </div>
+  </section>
+
+  <section>
+    <div class="eyebrow">Part II · Trading style</div>
+    <h2>Where this platform can actually compete</h2>
+    <p>Ranked by fit across LLM latency tolerance, data cost, broker access, professional competition, capital needs, backtest feasibility, and plausible LLM edge:</p>
+  </section>
+</div>
+
+<div class="wide">
+  <div class="tablewrap">
+    <table>
+      <thead>
+        <tr><th>Rank</th><th>Style</th><th>LLM edge</th><th>Data cost</th><th>Verdict</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="rank">1</td>
+          <td><strong>Swing equities/ETFs</strong><br><span class="muted">days–weeks, news &amp; fundamentals</span></td>
+          <td><span class="tag">High</span></td>
+          <td class="num">$0–100/mo</td>
+          <td>Every dimension green. Seconds of latency irrelevant; institutions can't chase small multi-day edges at size; strongest published LLM predictability sits in small caps and negative news.</td>
+        </tr>
+        <tr>
+          <td class="rank">2</td>
+          <td><strong>Event-driven</strong><br><span class="muted">earnings, filings, catalysts</span></td>
+          <td><span class="tag">Highest</span></td>
+          <td class="num">$0–100/mo</td>
+          <td>Where LLM strengths are most differentiated (10-K diffs, call-tone, guidance language). Compete on the 10–15 day post-earnings drift, never the first-seconds reaction. Runs as the signal engine <em>inside</em> #1.</td>
+        </tr>
+        <tr>
+          <td class="rank">3</td>
+          <td><strong>Crypto momentum / mean-reversion</strong></td>
+          <td><span class="tag warn">Medium</span></td>
+          <td class="num">Free</td>
+          <td>Best engineering sandbox: 24/7 markets, free websocket data, trade with $100, instant paper-to-live. Weaker evidence of LLM edge — social sentiment carries signal, news sentiment mostly noise. Secondary venue and integration test bed.</td>
+        </tr>
+        <tr>
+          <td class="rank">4</td>
+          <td><strong>Systematic rotation</strong><br><span class="muted">weekly/monthly rebalancing</span></td>
+          <td><span class="tag warn">Low</span></td>
+          <td class="num">Free</td>
+          <td>Most survivable, easiest honest backtests. The LLM contributes least — rotation is arithmetic, not reading. The platform's conservative default tier.</td>
+        </tr>
+        <tr>
+          <td class="rank">5</td>
+          <td><strong>Intraday equities</strong></td>
+          <td><span class="tag bad">Low</span></td>
+          <td class="num">$100–350/mo</td>
+          <td>The pattern-day-trader $25K rule was eliminated June 2026 — but signals still decay faster than an LLM round-trip, and the competition is professional intraday quant. Skip.</td>
+        </tr>
+        <tr>
+          <td class="rank">6</td>
+          <td><strong>HFT / market-making</strong></td>
+          <td><span class="tag bad">None</span></td>
+          <td class="num">$50K+/mo</td>
+          <td>Incumbents operate under 100µs; an LLM call is 5–7 orders of magnitude too slow. Documented here so it never comes up again.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="col">
+  <div class="callout">
+    <span class="lbl">Expectation setting</span>
+    Published LLM-sentiment strategy Sharpes decayed roughly 5× from 2021–2024 as everyone got the same models — plain headline sentiment is crowded out. The durable edge is in <em>harder</em> text (long filings, earnings-call Q&amp;A tone, cross-document synthesis), in less-covered names, and in research throughput and discipline. The cleanest published result is a modest one: an LLM news filter lifting a momentum strategy's out-of-sample Sharpe from 0.79 to 1.06. That's the realistic bar — not the influencer screenshots.
+  </div>
+
+  <section>
+    <div class="eyebrow">Part III · Architecture</div>
+    <h2>The three-plane design</h2>
+    <p>The same skeleton as production platforms like NexusTrade (agent sandboxes + elastic research compute + a small controlled-execution service + approval-and-risk gating inside the execution walls, all decoupled by an event bus), miniaturized to one-person scale. The rule that organizes everything: <strong>the LLM never touches the broker; it submits intents that pass through a deterministic gate.</strong></p>
+  </section>
+</div>
+
+<div class="wide">
+  <div class="diagram">
+    <div class="plane cog">
+      <div class="plabel">Cognition plane · Claude Agent SDK, async, scheduled</div>
+      <div class="nodes">
+        <div class="node">Researcher<small>pre-market + hourly · news/filings → regime signal (bounded params)</small></div>
+        <div class="node">Strategist<small>nightly/weekly · strategy evolution loop → pull requests</small></div>
+        <div class="node">Reviewer<small>post-market · attribution, journal, anomaly flags</small></div>
+      </div>
+    </div>
+    <div class="connector">strategy PRs (human-merged) · bounded parameters · never direct orders</div>
+    <div class="plane hot">
+      <div class="plabel">Execution plane · deterministic, no LLM in the hot path</div>
+      <div class="nodes">
+        <div class="node">Market data<small>Alpaca ws · EDGAR · news API</small></div>
+        <span class="arrow">→</span>
+        <div class="node">Strategy engine<small>versioned, git-tagged code</small></div>
+        <span class="arrow">→</span>
+        <div class="node risk">Risk gate<small>position/loss caps · kill switch · can veto anything</small></div>
+        <span class="arrow">→</span>
+        <div class="node">Broker<small>Alpaca paper → live</small></div>
+      </div>
+    </div>
+    <div class="connector">every order, fill, position, decision → append-only event stream</div>
+    <div class="plane obs">
+      <div class="plabel">Observability plane · event-sourced ledger</div>
+      <div class="nodes">
+        <div class="node">Postgres + Timescale<small>orders · fills · equity curve · decision journal</small></div>
+        <div class="node">Parquet lake<small>historical bars &amp; text for research</small></div>
+        <div class="node">Live dashboard<small>P&amp;L, attribution, journal browser, kill switch</small></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="col">
+  <h3>Why this split wins</h3>
+  <p>Three ways to wire an LLM into trading: <strong>author</strong> (Claude writes deterministic strategy code, the code trades — zero latency in the trade path, fully backtestable, failures are debuggable diffs), <strong>in-the-loop</strong> (Claude consulted per decision — seconds of latency, poor reproducibility, barely backtestable), and <strong>hybrid</strong>. Driftline is the hybrid: Claude authors and iterates strategies, and separately publishes slow-moving bounded parameters — <code>regime: risk-off</code>, <code>risk_appetite: 0.4</code> — that the fast code consumes as clamped inputs. LLM output enters the trade path only as a bounded number, never as an order.</p>
+
+  <h3>Stack choices</h3>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Layer</th><th>Choice</th><th>Why</th></tr></thead>
+      <tbody>
+        <tr><td>Execution core</td><td><strong>NautilusTrader</strong></td><td>Best backtest↔live parity in open source; Rust core; multi-asset. (freqtrade instead if we go crypto-first — its one-class strategy files are unusually LLM-friendly.) Never build order lifecycle from scratch.</td></tr>
+        <tr><td>Research engine</td><td><strong>vectorbt</strong></td><td>100–1000× faster parameter sweeps for the evolution loop; survivors get validated in the event-driven engine before deployment.</td></tr>
+        <tr><td>Orchestrator</td><td><strong>Claude Agent SDK</strong></td><td>Scheduled researcher/strategist/reviewer agents; permission system maps directly to safety (agents can write strategy files, but hold no broker credentials).</td></tr>
+        <tr><td>Broker</td><td><strong>Alpaca</strong> (+ ccxt later)</td><td>Official MCP server, commission-free, free real-time IEX websocket data, and a paper API identical to live — the promotion path is a config change.</td></tr>
+        <tr><td>Ledger</td><td><strong>Postgres + TimescaleDB</strong>, Parquet archive</td><td>One database for live state, pgvector for semantic search over filings/news, Parquet for research history. Never backtest against the operational DB.</td></tr>
+        <tr><td>Dashboard</td><td><strong>Next.js + websockets</strong> (Grafana for alerts)</td><td>Custom console for the views that matter: live equity curve, per-strategy-version attribution, the LLM decision journal, and a kill-switch button. Grafana handles drawdown alerting for free.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>Safety rails (non-negotiable, learned from others' losses)</h3>
+  <ul>
+    <li><strong>Risk gate outside Claude's reach:</strong> max position size, per-symbol and gross exposure caps, daily-loss halt (~3%), order-rate limits, market-hours enforcement — in code the agents cannot edit in the pipeline that runs it.</li>
+    <li><strong>Layered kill switches:</strong> software halt, a flag every component checks, broker-level buying-power caps, and the capital ladder itself.</li>
+    <li><strong>Approval at the right altitude:</strong> not per-trade (defeats automation) but per-strategy-change — Claude's edits ship as pull requests with an attached backtest report; a human merge is the gate. Audit, rollback, and diff-level explainability come free with git.</li>
+    <li><strong>Ground truth is read-only:</strong> positions and balances come from the ledger and broker reconciliation, never from an agent's memory. Reconcile against the broker on a loop; halt on divergence.</li>
+    <li><strong>Default to no-trade:</strong> uncertain or low-confidence agent output resolves to doing nothing.</li>
+    <li><strong>Fee-awareness in every fitness function:</strong> overtrading and costs were the #1 documented killer of LLM traders; backtests must survive a 30–45% cost haircut.</li>
+  </ul>
+
+  <h3>The novel part worth being ambitious about</h3>
+  <p>Overnight <strong>strategy evolution</strong>: Claude generates and mutates candidate strategy code, a vectorized backtest with walk-forward splits scores each candidate, survivors seed the next generation, and quality-diversity selection (QuantEvolve-style) keeps the population varied instead of converging on one overfit champion. Each morning the best validated candidate arrives as a pull request with its report. This loop — genuinely impractical in 2023, routine for a scheduled agent in 2026 — is the platform's distinctive capability. Its main risk is multiplicity (test thousands of candidates and some win by luck), mitigated by walk-forward splits, deflated-Sharpe corrections, realistic costs, and a paper-trading soak before promotion.</p>
+</div>
+
+<div class="col">
+  <section>
+    <div class="eyebrow">Part IV · Roadmap</div>
+    <h2>Build order</h2>
+    <ol class="phases">
+      <li class="phase">
+        <h3>Skeleton on paper</h3>
+        <p>Event bus, ledger schema, Alpaca paper account wired through the risk gate, one deliberately boring baseline strategy (momentum rotation). Reconciliation loop and kill switches from day one.</p>
+        <span class="gate">Gate: a week of clean paper fills, zero reconciliation breaks</span>
+      </li>
+      <li class="phase">
+        <h3>Dashboard v1</h3>
+        <p>Live equity curve, positions blotter, per-strategy P&amp;L attribution, decision journal browser, kill-switch button. Grafana drawdown alerts. Built early so every later phase is observable.</p>
+        <span class="gate">Gate: you can answer "why is it down today?" from the dashboard alone</span>
+      </li>
+      <li class="phase">
+        <h3>The reading edge</h3>
+        <p>EDGAR filings + news ingestion into the Parquet lake and pgvector; the Researcher agent starts publishing regime and per-name signals as bounded parameters; the event-driven earnings module trades the post-earnings drift window on paper.</p>
+        <span class="gate">Gate: signal hit-rate tracked forward for 4–6 weeks, fees included</span>
+      </li>
+      <li class="phase">
+        <h3>Evolution loop</h3>
+        <p>Nightly Strategist agent: generate → vectorized walk-forward scoring → event-driven validation → morning pull request. Reviewer agent writes the daily post-mortem.</p>
+        <span class="gate">Gate: an evolved strategy beats the baseline on paper, after costs</span>
+      </li>
+      <li class="phase">
+        <h3>Small live capital</h3>
+        <p>Flip the best paper-proven strategy to live with a small allocation and broker-level caps. Scale only what survives. Everything else stays on paper permanently — paper is not a phase, it's where all new ideas live.</p>
+        <span class="gate">Gate: your call, per strategy, with the forward record in front of you</span>
+      </li>
+    </ol>
+  </section>
+
+  <section>
+    <div class="eyebrow">Appendix</div>
+    <h2>Ground rules &amp; sources</h2>
+    <p class="muted">Claude builds, researches, backtests, paper-trades, and monitors this system; it proposes strategy changes as reviewable PRs and can run the automation under your broker keys and risk limits. Claude does not itself execute real-money trades or transfers, and nothing here is investment advice — the forward paper record, not this document, decides what goes live. Realistic goal: a modest, risk-managed edge and a dramatic upgrade in research throughput and discipline, not a money printer. Most retail algorithms lose money; the design above exists to keep this one alive long enough to learn.</p>
+    <ul class="srcs">
+      <li>Alpha Arena results &amp; failure modes — <a href="https://protos.com/llm-crypto-trading-contest-finds-llms-cant-trade-crypto/">Protos</a>, <a href="https://nof1.ai/">Nof1.ai</a></li>
+      <li>Polyphemus production bot — <a href="https://chudi.dev/blog/claude-code-production-trading-bot">chudi.dev</a></li>
+      <li>Multi-agent frameworks — <a href="https://github.com/virattt/ai-hedge-fund">virattt/ai-hedge-fund</a>, <a href="https://arxiv.org/abs/2412.20138">TradingAgents (arXiv)</a></li>
+      <li>Honest evaluation — <a href="https://arxiv.org/abs/2505.07078">FINSABER</a>, <a href="https://arxiv.org/abs/2510.02209">StockBench</a>, <a href="https://arxiv.org/pdf/2511.03628">LiveTradeBench</a>, reproducibility survey <a href="https://arxiv.org/html/2606.08285">arXiv 2606.08285</a></li>
+      <li>LLM edge in text — <a href="https://arxiv.org/abs/2304.07619">Lopez-Lira &amp; Tang</a>, <a href="https://arxiv.org/html/2407.17866v1">Financial Statement Analysis with LLMs</a>, <a href="https://arxiv.org/abs/2412.19245">Sentiment trading with LLMs</a></li>
+      <li>Strategy evolution — <a href="https://arxiv.org/pdf/2510.18569">QuantEvolve</a>, <a href="https://github.com/paperswithbacktest/pwb-alphaevolve">pwb-alphaevolve</a>, <a href="https://arxiv.org/pdf/2605.24490">Market Regime Council</a></li>
+      <li>PDT rule elimination (June 2026) — <a href="https://www.quantinsti.com/articles/finra-pdt-rule-removal-2026/">QuantInsti</a>, <a href="https://www.sec.gov/files/rules/sro/finra/2026/34-105226.pdf">SEC filing</a></li>
+      <li>Stack — <a href="https://nautilustrader.io">NautilusTrader</a>, <a href="https://alpaca.markets/algotrading">Alpaca</a>, <a href="https://github.com/ccxt/ccxt">ccxt MCP</a>, <a href="https://code.claude.com/docs/en/agent-sdk/overview">Claude Agent SDK</a></li>
+    </ul>
+  </section>
+
+  <footer>Driftline research brief · compiled 2026-09-01 · three parallel research streams, synthesized</footer>
+</div>
