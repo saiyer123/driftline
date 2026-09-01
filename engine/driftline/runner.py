@@ -80,7 +80,10 @@ async def run_live() -> None:
             symbol=symbol, qty=d["qty"], avg_entry=d["avg_entry"], mark=d["mark"]
         )
 
-    engine = TradingEngine(bus, portfolio, gate, broker, [BaselineMomentum(portfolio)],
+    from .risk.signal_store import SignalStore
+    signals = SignalStore(repo)
+    engine = TradingEngine(bus, portfolio, gate, broker,
+                           [BaselineMomentum(portfolio, signals=signals)],
                            armed=False)  # warm-up: no orders from historical bars
     feed = AlpacaFeed(settings, bus, UNIVERSE)
     reconciler = Reconciler(bus, portfolio, gate, broker)

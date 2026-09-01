@@ -46,10 +46,32 @@ momentum rotation at most weekly, reconciles against the broker every 5 minutes
 - **Paper only** in this phase. Real capital comes (much) later, behind forward
   paper results — see the roadmap in the research report.
 
+## The cognition plane (Claude)
+
+A separate process from the engine — the trade path never makes an LLM call.
+Needs `ANTHROPIC_API_KEY` in `.env` (console.anthropic.com) or an `ant auth login` profile:
+
+```bash
+cd engine && uv run python -m driftline.cognition.daemon
+```
+
+- **Researcher** (weekdays 13:00 UTC): reads recent market news (Alpaca news API) +
+  stored price action, publishes a bounded regime signal (risk appetite, clamped to
+  [0.3, 1.0] — it can de-risk, never lever up) and per-ETF tilts. Shown on the
+  dashboard's Signals page; consumed by the strategy at its next rebalance.
+- **Reviewer** (weekdays 21:30 UTC): reads the day's ledger and writes an honest
+  post-mortem into the Journal (process over outcome).
+- **Strategist** (Saturdays 02:00 UTC): Claude proposes parameter candidates; the
+  deterministic backtester scores them walk-forward on stored real bars with a
+  validation window Claude never sees; a ranked report lands in `candidates/`.
+  Promotion is always a human code edit — nothing applies automatically.
+
+One-shot runs: `uv run python -m driftline.cognition.daemon --once research` (or `review`, `strategist`).
+
 ## Roadmap
 
-1. ✅ Deterministic skeleton on paper + dashboard v1 (this)
-2. Dashboard polish, Grafana-style alerting
-3. The reading edge: EDGAR filings + news → Claude regime/name signals (bounded parameters)
-4. Overnight strategy-evolution loop; Claude ships strategy changes as PRs
-5. Small live capital, per-strategy, gated on forward paper records
+1. ✅ Deterministic skeleton on paper + dashboard v1
+2. ✅ Cognition plane: researcher / reviewer / strategist + Signals page
+3. Deeper reading edge: EDGAR filings ingestion + pgvector, earnings-drift module
+4. Strategy candidates as git branches/PRs; richer evolution loop
+5. Small live capital, per-strategy, gated on months of forward paper record

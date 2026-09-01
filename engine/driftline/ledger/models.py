@@ -81,6 +81,30 @@ class JournalRow(Base):
     payload: Mapped[dict] = mapped_column(JSON, default=dict)
 
 
+class SignalRow(Base):
+    __tablename__ = "signals"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    ts: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    kind: Mapped[str] = mapped_column(String(24), index=True)
+    key: Mapped[str] = mapped_column(String(24), index=True)
+    value: Mapped[float] = mapped_column(Float)
+    confidence: Mapped[float] = mapped_column(Float)
+    reasoning: Mapped[str] = mapped_column(Text)
+    source_model: Mapped[str] = mapped_column(String(48))
+
+
+class BarRow(Base):
+    __tablename__ = "bars"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    bar_ts: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    symbol: Mapped[str] = mapped_column(String(16), index=True)
+    open: Mapped[float] = mapped_column(Float)
+    high: Mapped[float] = mapped_column(Float)
+    low: Mapped[float] = mapped_column(Float)
+    close: Mapped[float] = mapped_column(Float)
+    volume: Mapped[float] = mapped_column(Float)
+
+
 class HaltRow(Base):
     __tablename__ = "halts"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)

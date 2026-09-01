@@ -10,8 +10,11 @@ refuses to start unless `ALPACA_PAPER=true`.
   in this path.
 - `dashboard/` — Next.js console talking to the engine's FastAPI on `127.0.0.1:8484`
   (REST + `/ws` event stream).
-- Cognition plane (Claude agents authoring strategies, reading news/filings) comes in
-  later phases; design in `docs/driftline-research.html`.
+- `engine/driftline/cognition/` — the cognition plane: a **separate process** running
+  Claude jobs (researcher, reviewer, strategist). It writes bounded `ResearchSignal`s
+  and journal entries to the ledger; the engine consumes them only through
+  `risk/signal_store.py`, which clamps every value and decays stale signals to
+  neutral. Design in `docs/driftline-research.html`.
 
 ## Iron rules
 
@@ -25,7 +28,13 @@ refuses to start unless `ALPACA_PAPER=true`.
 4. New strategies subclass `strategy/base.py:Strategy`, must journal every decision
    (`JournalEntry`), and are tagged with the git SHA for attribution.
 5. Backtests with an LLM in the loop over pre-training-cutoff data are contaminated
-   (parametric look-ahead bias) — evaluate forward on paper instead.
+   (parametric look-ahead bias) — evaluate forward on paper instead. The strategist
+   keeps Claude proposal-only: candidates are scored by the deterministic backtester
+   (`cognition/backtest.py`) with a held-out validation window Claude never sees.
+6. `risk/signal_store.py` is part of the risk plane (same protection as the gate):
+   LLM output enters the trade path only through its clamps. The researcher can
+   de-risk (floor 0.3×) but can never lever up (cap 1.0×); stale signals decay to
+   neutral. Strategist output is a report — a human edits strategy constants to apply.
 
 ## Commands
 
@@ -33,6 +42,10 @@ refuses to start unless `ALPACA_PAPER=true`.
 - Replay run (no keys needed): `cd engine && uv run python scripts/make_replay_csv.py && uv run python -m driftline.runner --replay replay-bars.csv`
 - Live paper run (needs `.env` from `.env.example`): `cd engine && uv run python -m driftline.runner`
 - Dashboard: `cd dashboard && npm run dev` → http://localhost:3000
+- Cognition daemon (needs `ANTHROPIC_API_KEY` in `.env` or an `ant auth login` profile):
+  `cd engine && uv run python -m driftline.cognition.daemon` — schedules research
+  (weekdays 13:00 UTC), review (weekdays 21:30 UTC), strategist (Sat 02:00 UTC).
+  One-shot: `... daemon --once research|review|strategist`.
 
 ## Conventions
 

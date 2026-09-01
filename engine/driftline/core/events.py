@@ -144,6 +144,22 @@ class ResumeEvent(Event):
 
 
 @dataclass
+class ResearchSignal(Event):
+    """A bounded parameter published by the cognition plane.
+
+    The engine consumes these as clamped inputs (never as orders). kind is
+    "regime" (key: "market") or "symbol_tilt" (key: a ticker); value is
+    bounded per kind at both write and read time.
+    """
+    kind: str
+    key: str
+    value: float
+    confidence: float
+    reasoning: str
+    source_model: str
+
+
+@dataclass
 class JournalEntry(Event):
     strategy: str
     strategy_version: str

@@ -25,8 +25,9 @@ TARGET_GROSS = 0.9     # keep some cash; also keeps us inside the gate's caps
 class BaselineMomentum(Strategy):
     name = "baseline_momentum"
 
-    def __init__(self, portfolio):
+    def __init__(self, portfolio, signals=None):
         super().__init__(portfolio)
+        self.signals = signals  # SignalStore or None; read-only bounded params
         self.history: dict[str, deque[float]] = defaultdict(lambda: deque(maxlen=LOOKBACK + 1))
         self.last_close: dict[str, float] = {}
         self._seen_dates: dict[str, date] = {}
@@ -73,7 +74,10 @@ class BaselineMomentum(Strategy):
         }
         ranked = sorted(momentum, key=momentum.get, reverse=True)
         winners = [s for s in ranked[:TOP_N] if momentum[s] > 0]  # absolute-momentum filter
-        weight = TARGET_GROSS / TOP_N if winners else 0.0
+        # cognition-plane regime signal scales gross exposure; the SignalStore
+        # clamps it to [0.3, 1.0], so at worst this de-risks — never levers up
+        risk_appetite = self.signals.risk_appetite() if self.signals else 1.0
+        weight = (TARGET_GROSS * risk_appetite) / TOP_N if winners else 0.0
         equity = self.portfolio.equity
 
         events: list[Event] = [
@@ -81,10 +85,11 @@ class BaselineMomentum(Strategy):
                 strategy=self.name, strategy_version=self.version, kind="decision",
                 text=(
                     f"{d.isoformat()} rebalance: hold {winners or 'cash only'} at "
-                    f"{weight:.1%} each. Momentum ranks: "
+                    f"{weight:.1%} each (risk appetite {risk_appetite:.2f}). Momentum ranks: "
                     + ", ".join(f"{s} {momentum[s]:+.1%}" for s in ranked)
                 ),
-                payload={"momentum": momentum, "winners": winners, "weight": weight},
+                payload={"momentum": momentum, "winners": winners, "weight": weight,
+                         "risk_appetite": risk_appetite},
                 ts=bar_ts,
             )
         ]

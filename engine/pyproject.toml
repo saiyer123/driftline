@@ -12,6 +12,7 @@ dependencies = [
     "pydantic-settings>=2.4",
     "python-dotenv>=1.0",
     "pandas>=2.2",
+    "anthropic>=1.0",
 ]
 
 [dependency-groups]

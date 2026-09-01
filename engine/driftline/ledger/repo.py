@@ -18,11 +18,14 @@ from ..core.events import (
     Fill,
     HaltEvent,
     JournalEntry,
+    MarketBar,
     OrderUpdate,
     PositionSnapshot,
+    ResearchSignal,
     ResumeEvent,
 )
 from .models import (
+    BarRow,
     Base,
     EquitySnapshotRow,
     FillRow,
@@ -30,6 +33,7 @@ from .models import (
     JournalRow,
     OrderRow,
     PositionSnapshotRow,
+    SignalRow,
 )
 
 
@@ -77,6 +81,17 @@ class LedgerRepo:
             return JournalRow(
                 ts=e.ts, strategy=e.strategy, strategy_version=e.strategy_version,
                 kind=e.kind, text=e.text, payload=e.payload,
+            )
+        if isinstance(e, ResearchSignal):
+            return SignalRow(
+                ts=e.ts, kind=e.kind, key=e.key, value=e.value,
+                confidence=e.confidence, reasoning=e.reasoning,
+                source_model=e.source_model,
+            )
+        if isinstance(e, MarketBar):
+            return BarRow(
+                bar_ts=e.bar_ts, symbol=e.symbol, open=e.open, high=e.high,
+                low=e.low, close=e.close, volume=e.volume,
             )
         if isinstance(e, HaltEvent):
             return HaltRow(ts=e.ts, action="halt", source=e.source, reason=e.reason)
@@ -184,6 +199,44 @@ class LedgerRepo:
             a["fees"] += r.fee
             a["fills"] += 1
         return sorted(agg.values(), key=lambda a: a["cashflow"], reverse=True)
+
+    def latest_signals(self) -> list[dict]:
+        """Most recent signal per (kind, key)."""
+        with Session(self.engine) as s:
+            rows = s.scalars(select(SignalRow).order_by(SignalRow.ts.desc()).limit(500)).all()
+        seen: set[tuple[str, str]] = set()
+        out = []
+        for r in rows:
+            k = (r.kind, r.key)
+            if k in seen:
+                continue
+            seen.add(k)
+            out.append({
+                "ts": r.ts.isoformat(), "kind": r.kind, "key": r.key,
+                "value": r.value, "confidence": r.confidence,
+                "reasoning": r.reasoning, "source_model": r.source_model,
+            })
+        return out
+
+    def daily_bars(self, symbol: str, limit: int = 400) -> list[dict]:
+        """Stored daily bars, oldest first, deduped to one bar per day."""
+        with Session(self.engine) as s:
+            rows = s.scalars(
+                select(BarRow).where(BarRow.symbol == symbol)
+                .order_by(BarRow.bar_ts.desc()).limit(limit * 2)
+            ).all()
+        seen_days: set[str] = set()
+        out = []
+        for r in rows:
+            day = r.bar_ts.date().isoformat()
+            if day in seen_days:
+                continue
+            seen_days.add(day)
+            out.append({"date": day, "open": r.open, "high": r.high, "low": r.low,
+                        "close": r.close, "volume": r.volume})
+            if len(out) >= limit:
+                break
+        return list(reversed(out))
 
     def halts(self, limit: int = 50) -> list[dict]:
         with Session(self.engine) as s:

@@ -99,6 +99,10 @@ def build_app(bus: EventBus, repo: LedgerRepo, portfolio: Portfolio, gate: RiskG
     def halts() -> list[dict]:
         return repo.halts()
 
+    @app.get("/signals")
+    def signals() -> list[dict]:
+        return repo.latest_signals()
+
     @app.post("/kill")
     async def kill() -> dict:
         gate.kill("kill switch pressed on dashboard")
