@@ -21,6 +21,15 @@ from ..core.events import MarketBar
 
 log = logging.getLogger(__name__)
 
+SESSION_CLOSE_UTC = 20  # 4pm ET (winter 21:00; being an hour early only delays a bar)
+
+
+def is_bar_complete(bar_ts: datetime, now: datetime) -> bool:
+    """Only completed daily bars feed strategies — an in-progress session's bar
+    changes all day and would have the system deciding on partial data."""
+    close = bar_ts.replace(hour=SESSION_CLOSE_UTC, minute=5, second=0, microsecond=0)
+    return now >= close
+
 
 class AlpacaFeed:
     def __init__(self, settings: Settings, bus: EventBus, symbols: list[str]):
@@ -38,10 +47,13 @@ class AlpacaFeed:
             symbol_or_symbols=self.symbols, timeframe=TimeFrame.Day, start=start
         )
         bars = await asyncio.to_thread(self.client.get_stock_bars, req)
+        now = datetime.now(timezone.utc)
         events: list[MarketBar] = []
         for symbol in self.symbols:
             for b in bars.data.get(symbol, []):
-                events.append(self._to_event(symbol, b))
+                e = self._to_event(symbol, b)
+                if is_bar_complete(e.bar_ts, now):
+                    events.append(e)
         events.sort(key=lambda e: e.bar_ts)
         for e in events:
             self._last_bar_date[e.symbol] = e.bar_ts.date().isoformat()
@@ -63,10 +75,13 @@ class AlpacaFeed:
             symbol_or_symbols=self.symbols, timeframe=TimeFrame.Day, start=start
         )
         bars = await asyncio.to_thread(self.client.get_stock_bars, req)
+        now = datetime.now(timezone.utc)
         fresh: list[MarketBar] = []
         for symbol in self.symbols:
             for b in bars.data.get(symbol, []):
                 e = self._to_event(symbol, b)
+                if not is_bar_complete(e.bar_ts, now):
+                    continue
                 d = e.bar_ts.date().isoformat()
                 if self._last_bar_date.get(symbol, "") < d:
                     self._last_bar_date[symbol] = d
