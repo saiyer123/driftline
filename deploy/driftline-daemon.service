@@ -1,0 +1,15 @@
+[Unit]
+Description=Driftline cognition daemon (Claude jobs)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=driftline
+WorkingDirectory=/home/driftline/driftline/engine
+ExecStart=/home/driftline/.local/bin/uv run python -m driftline.cognition.daemon
+Restart=always
+RestartSec=60
+
+[Install]
+WantedBy=multi-user.target

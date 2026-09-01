@@ -81,11 +81,14 @@ async def run_live() -> None:
         )
 
     from .risk.signal_store import SignalStore
+    from .strategy.earnings_drift import EarningsDrift
+    from .strategy.watchlist import WATCHLIST
     signals = SignalStore(repo)
     engine = TradingEngine(bus, portfolio, gate, broker,
-                           [BaselineMomentum(portfolio, signals=signals)],
+                           [BaselineMomentum(portfolio, signals=signals),
+                            EarningsDrift(portfolio, signals=signals, repo=repo)],
                            armed=False)  # warm-up: no orders from historical bars
-    feed = AlpacaFeed(settings, bus, UNIVERSE)
+    feed = AlpacaFeed(settings, bus, UNIVERSE + WATCHLIST)
     reconciler = Reconciler(bus, portfolio, gate, broker)
     app = build_app(bus, repo, portfolio, gate)
     server = uvicorn.Server(uvicorn.Config(app, host=settings.api_host, port=settings.api_port, log_level="warning"))

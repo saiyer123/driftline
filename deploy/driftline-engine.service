@@ -1,0 +1,16 @@
+[Unit]
+Description=Driftline trading engine (paper)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=driftline
+WorkingDirectory=/home/driftline/driftline/engine
+ExecStart=/home/driftline/.local/bin/uv run python -m driftline.runner
+Restart=always
+RestartSec=15
+# engine halts itself on errors; systemd only restarts crashes
+
+[Install]
+WantedBy=multi-user.target

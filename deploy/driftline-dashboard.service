@@ -1,0 +1,16 @@
+[Unit]
+Description=Driftline dashboard (Next.js, localhost only)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=driftline
+WorkingDirectory=/home/driftline/driftline/dashboard
+# localhost-only: reach it through an SSH tunnel, never expose it publicly
+ExecStart=/usr/bin/npm run start -- -H 127.0.0.1 -p 3000
+Restart=always
+RestartSec=15
+
+[Install]
+WantedBy=multi-user.target

@@ -29,6 +29,19 @@ class ResearchReport(BaseModel):
     notable_risks: list[str] = Field(description="Concrete near-term risks worth monitoring (0-5 items)")
 
 
+class EarningsAssessment(BaseModel):
+    """Read of one earnings 8-K / press release, for the post-earnings-drift window."""
+    surprise: str = Field(description="One of: beat, inline, miss, unclear")
+    guidance: str = Field(description="One of: raised, maintained, lowered, none_given, unclear")
+    score: float = Field(
+        ge=-1.0, le=1.0,
+        description="Drift conviction: +1 = strong positive drift setup (clear beat, raised guidance, "
+                    "high-quality results), -1 = strongly negative, 0 = no edge / unclear",
+    )
+    confidence: float = Field(ge=0.0, le=1.0)
+    reasoning: str = Field(description="2-4 sentences citing specific numbers/language from the filing text")
+
+
 class DailyReview(BaseModel):
     summary: str = Field(description="Plain-language post-mortem of the trading day (3-6 sentences)")
     what_worked: list[str]

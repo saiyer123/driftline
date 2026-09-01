@@ -105,6 +105,17 @@ class BarRow(Base):
     volume: Mapped[float] = mapped_column(Float)
 
 
+class FilingRow(Base):
+    """EDGAR filings we have already analyzed — prevents reprocessing."""
+    __tablename__ = "filings"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    ts: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    symbol: Mapped[str] = mapped_column(String(16), index=True)
+    form: Mapped[str] = mapped_column(String(12))
+    filed: Mapped[str] = mapped_column(String(12))
+    accession: Mapped[str] = mapped_column(String(24), index=True, unique=True)
+
+
 class HaltRow(Base):
     __tablename__ = "halts"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)

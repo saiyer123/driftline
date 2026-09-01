@@ -17,6 +17,7 @@ export default function Signals() {
 
   const regime = signals?.find((s) => s.kind === "regime" && s.key === "market");
   const tilts = (signals || []).filter((s) => s.kind === "symbol_tilt");
+  const earnings = (signals || []).filter((s) => s.kind === "earnings");
   const label = regimeLabel(regime?.value);
 
   return (
@@ -43,6 +44,44 @@ export default function Signals() {
             No research signal yet — <span className="mono">uv run python -m driftline.cognition.daemon --once research</span>
           </div>
         )}
+      </div>
+
+      <div className="panel">
+        <h2>Earnings signals — Claude analyst (EDGAR 8-Ks)</h2>
+        <div className="tablewrap">
+          {earnings.length ? (
+            <table>
+              <thead>
+                <tr>
+                  <th>Symbol</th><th className="r">Score</th><th className="r">Confidence</th>
+                  <th>Reasoning</th><th>As of</th>
+                </tr>
+              </thead>
+              <tbody>
+                {earnings.sort((a, b) => b.value - a.value).map((e) => (
+                  <tr key={e.key}>
+                    <td className="mono">{e.key}</td>
+                    <td className={`mono r ${e.value > 0.1 ? "pos" : e.value < -0.1 ? "neg" : ""}`}>
+                      {e.value > 0 ? "+" : ""}{e.value.toFixed(2)}
+                    </td>
+                    <td className="mono r">{(e.confidence * 100).toFixed(0)}%</td>
+                    <td style={{ whiteSpace: "normal", maxWidth: 480 }}>{e.reasoning}</td>
+                    <td className="mono">{fmtTime(e.ts)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <div className="empty">
+              No earnings signals — none of the watchlist filed an earnings 8-K in the last few days,
+              or the analyst hasn&apos;t run yet.
+            </div>
+          )}
+        </div>
+        <p style={{ color: "var(--muted)", fontSize: 12.5, marginBottom: 0 }}>
+          Scores ≥ +0.50 with confidence ≥ 50% trigger a 5% post-earnings-drift entry
+          (max 4 concurrent, ~12 session hold). Negative scores are only ever avoided — never shorted.
+        </p>
       </div>
 
       <div className="panel">

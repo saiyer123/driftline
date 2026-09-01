@@ -238,6 +238,37 @@ class LedgerRepo:
                 break
         return list(reversed(out))
 
+    def filing_seen(self, accession: str) -> bool:
+        from .models import FilingRow
+        with Session(self.engine) as s:
+            return s.scalar(select(FilingRow.id).where(FilingRow.accession == accession)) is not None
+
+    def mark_filing(self, symbol: str, form: str, filed: str, accession: str) -> None:
+        from .models import FilingRow
+        with Session(self.engine) as s:
+            s.add(FilingRow(ts=datetime.now(timezone.utc), symbol=symbol,
+                            form=form, filed=filed, accession=accession))
+            s.commit()
+
+    def strategy_positions(self, strategy: str) -> dict[str, dict]:
+        """Net qty and last-entry timestamp per symbol from this strategy's fills.
+
+        Lets a restarted strategy rebuild its holding state deterministically.
+        """
+        with Session(self.engine) as s:
+            rows = s.scalars(
+                select(FillRow).where(FillRow.strategy == strategy).order_by(FillRow.ts)
+            ).all()
+        out: dict[str, dict] = {}
+        for r in rows:
+            p = out.setdefault(r.symbol, {"qty": 0.0, "last_entry": None})
+            if r.side == "buy":
+                p["qty"] += r.qty
+                p["last_entry"] = r.ts.isoformat()
+            else:
+                p["qty"] -= r.qty
+        return {sym: p for sym, p in out.items() if p["qty"] > 1e-9}
+
     def halts(self, limit: int = 50) -> list[dict]:
         with Session(self.engine) as s:
             rows = s.scalars(select(HaltRow).order_by(HaltRow.ts.desc()).limit(limit)).all()

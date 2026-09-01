@@ -23,6 +23,10 @@ class Settings(BaseSettings):
     alpaca_secret_key: str = ""
     alpaca_paper: bool = True
 
+    # SEC EDGAR fair-access policy requires a contact in the User-Agent.
+    # Set to your email in .env; EDGAR ingestion is skipped when empty.
+    edgar_contact: str = ""
+
     db_path: Path = REPO_ROOT / "driftline.db"
     event_log_path: Path = REPO_ROOT / "events.jsonl"
     kill_switch_path: Path = REPO_ROOT / "KILL"

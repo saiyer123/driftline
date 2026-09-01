@@ -51,3 +51,20 @@ class SignalStore:
         if s is None:
             return 0.0
         return _clamp(s["value"], TILT_MIN, TILT_MAX)
+
+    def earnings_event(self, symbol: str, max_age_hours: int = 96) -> dict | None:
+        """Fresh earnings-drift signal: {'score': [-1,1], 'ts': iso} or None.
+
+        The tight default freshness window (4 days) is the drift entry window —
+        a week-old earnings signal is not an entry, it's history.
+        """
+        saved = self.max_age
+        self.max_age = timedelta(hours=max_age_hours)
+        try:
+            s = self._fresh("earnings", symbol)
+        finally:
+            self.max_age = saved
+        if s is None:
+            return None
+        return {"score": _clamp(s["value"], TILT_MIN, TILT_MAX), "ts": s["ts"],
+                "confidence": s["confidence"]}

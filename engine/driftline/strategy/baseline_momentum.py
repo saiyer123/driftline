@@ -14,12 +14,11 @@ from datetime import date
 from ..core.events import Event, JournalEntry, MarketBar, OrderIntent, Side
 from .base import Strategy
 
+from .params import LOOKBACK, REBALANCE_DAYS, TARGET_GROSS, TOP_N
+
 UNIVERSE = ["SPY", "QQQ", "IWM", "EFA", "EEM", "TLT", "GLD", "DBC"]
-LOOKBACK = 63          # trading days for momentum
-TOP_N = 3
 REBALANCE_WEEKDAY = 0  # Monday
 MIN_TRADE_VALUE = 200  # skip dust rebalances
-TARGET_GROSS = 0.9     # keep some cash; also keeps us inside the gate's caps
 
 
 class BaselineMomentum(Strategy):
@@ -63,7 +62,9 @@ class BaselineMomentum(Strategy):
             return True
         if d <= self._last_rebalance:
             return False
-        return d.weekday() == REBALANCE_WEEKDAY or (d - self._last_rebalance).days >= 7
+        if (d - self._last_rebalance).days < REBALANCE_DAYS:
+            return False
+        return d.weekday() == REBALANCE_WEEKDAY or (d - self._last_rebalance).days >= REBALANCE_DAYS + 3
 
     def _rebalance(self, d: date, bar_ts) -> list[Event]:
         # events are stamped with bar time, not wall clock, so replay and live

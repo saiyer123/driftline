@@ -44,8 +44,21 @@ refuses to start unless `ALPACA_PAPER=true`.
 - Dashboard: `cd dashboard && npm run dev` → http://localhost:3000
 - Cognition daemon (needs `ANTHROPIC_API_KEY` in `.env` or an `ant auth login` profile):
   `cd engine && uv run python -m driftline.cognition.daemon` — schedules research
-  (weekdays 13:00 UTC), review (weekdays 21:30 UTC), strategist (Sat 02:00 UTC).
-  One-shot: `... daemon --once research|review|strategist`.
+  (weekdays 13:00 UTC), analyst/EDGAR earnings (weekdays 11:00 + 22:30 UTC, needs
+  `EDGAR_CONTACT` in `.env`), review (weekdays 21:30 UTC), strategist (Sat 02:00 UTC).
+  One-shot: `... daemon --once research|analyst|review|strategist`.
+- VPS deployment: `deploy/README.md` (rsync + `deploy/setup.sh` + systemd units;
+  dashboard reached via SSH tunnel only).
+
+## Strategies
+
+- `baseline_momentum` — weekly ETF rotation over `UNIVERSE`; tunables live in
+  `strategy/params.py`, the unit of strategist evolution (candidate branches edit
+  only that file).
+- `earnings_drift` — post-earnings drift on `strategy/watchlist.py` stocks
+  (disjoint from UNIVERSE): analyst scores earnings 8-Ks from EDGAR; deterministic
+  entry (score ≥ 0.5, conf ≥ 0.5, ≤4 days old), 5% weight, max 4 concurrent,
+  ~12-session hold, idempotent exits, long-only (negative scores only avoided).
 
 ## Conventions
 

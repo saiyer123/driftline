@@ -20,12 +20,13 @@ import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
 
-from . import research, review, strategist
+from . import analyst, research, review, strategist
 
 log = logging.getLogger(__name__)
 
 JOBS = {
     "research": research.run_once,
+    "analyst": analyst.run_once,
     "review": review.run_once,
     "strategist": strategist.run_once,
 }
@@ -39,6 +40,11 @@ def next_fire(name: str, now: datetime) -> datetime:
     for _ in range(9):  # scan forward day by day
         if name == "research" and candidate.weekday() < 5 and at(candidate, 13, 0) > now:
             return at(candidate, 13, 0)
+        if name == "analyst" and candidate.weekday() < 5:
+            # twice on weekdays: pre-market sweep and after the post-close 8-K wave
+            for h, m in ((11, 0), (22, 30)):
+                if at(candidate, h, m) > now:
+                    return at(candidate, h, m)
         if name == "review" and candidate.weekday() < 5 and at(candidate, 21, 30) > now:
             return at(candidate, 21, 30)
         if name == "strategist" and candidate.weekday() == 5 and at(candidate, 2, 0) > now:
