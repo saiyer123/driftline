@@ -55,7 +55,7 @@ systemctl --no-pager --lines=3 status driftline-engine driftline-daemon driftlin
 cat <<'EOF'
 
 Done. From your laptop, open the dashboard through an SSH tunnel:
-  ssh -N -L 3000:localhost:3000 driftline@<server-ip>
+  ssh -N -L 3000:localhost:3000 -L 8484:localhost:8484 root@<server-ip>
 then visit http://localhost:3000
 
 Logs:  journalctl -u driftline-engine -f

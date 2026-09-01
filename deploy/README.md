@@ -34,7 +34,7 @@ DigitalOcean basic droplet).
 4. **Open the dashboard from your laptop** (keep this running while you look):
 
    ```bash
-   ssh -N -L 3000:localhost:3000 driftline@<server-ip>
+   ssh -N -L 3000:localhost:3000 -L 8484:localhost:8484 root@<server-ip>
    ```
 
    → http://localhost:3000
