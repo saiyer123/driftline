@@ -8,6 +8,8 @@ REPO=/home/driftline/driftline
 
 echo "== user =="
 id -u driftline &>/dev/null || adduser --disabled-password --gecos "" driftline
+# rsync may have created the home dir as root before the user existed
+chown driftline:driftline /home/driftline
 
 echo "== packages =="
 apt-get update -qq

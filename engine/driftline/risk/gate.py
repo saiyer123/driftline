@@ -75,6 +75,11 @@ class RiskGate:
 
     # -- daily loss tracking -------------------------------------------------
 
+    def reset_day(self, equity: float, now: datetime | None = None) -> None:
+        """Start a fresh daily-loss baseline (e.g. when live trading arms)."""
+        self._day = now or datetime.now(timezone.utc)
+        self._day_start_equity = equity
+
     def observe_equity(self, equity: float, now: datetime | None = None) -> None:
         now = now or datetime.now(timezone.utc)
         if self._day is None or now.date() != self._day.date():

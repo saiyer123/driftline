@@ -46,6 +46,7 @@ class TradingEngine:
     def arm(self) -> None:
         """End warm-up: allow trading and let strategies reset their cadence."""
         self.armed = True
+        self.gate.reset_day(self.portfolio.equity)  # today's baseline = real current equity
         for s in self.strategies:
             s.on_go_live()
         log.info("engine armed: strategies now trade on fresh bars")
@@ -53,7 +54,10 @@ class TradingEngine:
     async def on_bar(self, event: Event) -> None:
         bar: MarketBar = event  # type: ignore[assignment]
         self.portfolio.apply_mark(bar)
-        self.gate.observe_equity(self.portfolio.equity, now=bar.ts)
+        # during warm-up, marks come from historical bars while positions are
+        # current — equity is meaningless, so the loss tracker must not watch it
+        if self.armed:
+            self.gate.observe_equity(self.portfolio.equity, now=bar.ts)
         await self._announce_halt_if_needed()
 
         for strategy in self.strategies:
