@@ -65,6 +65,7 @@ class MarketBar(Event):
     close: float
     volume: float
     bar_ts: datetime  # bar period end, exchange time (UTC)
+    feed: str = "iex"  # data provenance: "iex" (free Alpaca), "sip", "replay"
 
 
 @dataclass

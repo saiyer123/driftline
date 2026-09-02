@@ -31,6 +31,13 @@ REBALANCE_WEEKDAY = 0   # Monday
 MIN_TRADE_VALUE = 200   # skip dust rebalances
 BUDGET = 0.75           # fraction of account equity this strategy sizes against
 
+# Off-cycle de-risk: if the researcher's risk appetite falls this far below the
+# level used at the last rebalance AND under the floor, sell down to the new
+# weights immediately instead of waiting for Monday. Sells only — an appetite
+# RISE always waits for the next rebalance (asymmetry is the point).
+DERISK_DROP = 0.25
+DERISK_FLOOR = 0.6
+
 
 class BaselineMomentum(Strategy):
     name = "baseline_momentum"
@@ -43,6 +50,8 @@ class BaselineMomentum(Strategy):
         self._seen_dates: dict[str, date] = {}
         self._last_rebalance: date | None = None
         self._pending_targets: dict[str, float] | None = None  # symbol -> weight
+        self._derisk_only = False       # pending targets may only SELL toward
+        self._applied_appetite = 1.0    # appetite baked into current targets
         self._last_target_pass: date | None = None
         self._restored = False
         if repo is not None:
@@ -91,10 +100,44 @@ class BaselineMomentum(Strategy):
                 self._last_rebalance = bar_date
                 return self._decide(bar_date, bar.bar_ts)
 
+        derisk = self._check_offcycle_derisk(bar_date, bar.bar_ts)
+        if derisk:
+            return derisk
+
         # keep pursuing unmet targets from a prior decision, once per day
         if self._pending_targets is not None and self._last_target_pass != bar_date:
             return self._emit_toward_targets(bar_date, bar.bar_ts, journal_progress=True)
         return []
+
+    def _check_offcycle_derisk(self, d: date, bar_ts) -> list[Event]:
+        """Between rebalances, a sharp drop in the regime signal sells down to
+        the new weights immediately. Sells only; buying back waits for Monday."""
+        if self.signals is None:
+            return []
+        appetite = self.signals.risk_appetite()
+        if appetite > DERISK_FLOOR or appetite > self._applied_appetite - DERISK_DROP:
+            return []
+        old_appetite = self._applied_appetite
+        scale = appetite / max(old_appetite, 1e-9)
+        equity = self.portfolio.equity
+        targets: dict[str, float] = {}
+        for symbol in UNIVERSE:
+            pos = self.portfolio.positions.get(symbol)
+            price = self.last_close.get(symbol, 0.0)
+            current_w = (pos.qty * price / equity) if (pos and price > 0 and equity > 0) else 0.0
+            targets[symbol] = current_w * scale
+        self._pending_targets = targets
+        self._derisk_only = True
+        self._applied_appetite = appetite
+        journal = JournalEntry(
+            strategy=self.name, strategy_version=self.version, kind="decision",
+            text=(f"{d.isoformat()} OFF-CYCLE DE-RISK: risk appetite fell to {appetite:.2f} "
+                  f"from {old_appetite:.2f} at the last rebalance. "
+                  f"Selling positions down by {1 - scale:.0%}; re-risking waits for the next rebalance."),
+            payload={"appetite": appetite, "scale": scale},
+            ts=bar_ts,
+        )
+        return [journal, *self._emit_toward_targets(d, bar_ts, journal_progress=False)]
 
     def _should_rebalance(self, d: date) -> bool:
         if self._last_rebalance is None:
@@ -119,6 +162,8 @@ class BaselineMomentum(Strategy):
         weight = effective_gross / TOP_N if winners else 0.0
 
         self._pending_targets = {s: (weight if s in winners else 0.0) for s in UNIVERSE}
+        self._derisk_only = False
+        self._applied_appetite = risk_appetite
         journal = JournalEntry(
             strategy=self.name, strategy_version=self.version, kind="decision",
             text=(
@@ -150,6 +195,8 @@ class BaselineMomentum(Strategy):
             if qty <= 0:
                 continue
             side = Side.BUY if delta_value > 0 else Side.SELL
+            if side == Side.BUY and self._derisk_only:
+                continue  # de-risk targets may only reduce, never add
             if side == Side.SELL and pos is not None:
                 qty = min(qty, pos.qty)  # long-only: never sell more than held
             intents.append(OrderIntent(
@@ -160,6 +207,7 @@ class BaselineMomentum(Strategy):
             ))
         if not intents:
             self._pending_targets = None  # converged
+            self._derisk_only = False
             return []
         events: list[Event] = []
         if journal_progress:

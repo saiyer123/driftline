@@ -104,6 +104,7 @@ class BarRow(Base):
     low: Mapped[float] = mapped_column(Float)
     close: Mapped[float] = mapped_column(Float)
     volume: Mapped[float] = mapped_column(Float)
+    feed: Mapped[str] = mapped_column(String(8), default="iex")
 
 
 class FilingRow(Base):

@@ -54,6 +54,9 @@ class LedgerRepo:
             conn.execute(text(
                 "CREATE UNIQUE INDEX IF NOT EXISTS uq_bars_symbol_ts ON bars (symbol, bar_ts)"
             ))
+            cols = [r[1] for r in conn.execute(text("PRAGMA table_info(bars)"))]
+            if "feed" not in cols:
+                conn.execute(text("ALTER TABLE bars ADD COLUMN feed VARCHAR(8) DEFAULT 'iex'"))
 
     # -- bus handler ---------------------------------------------------------
 
@@ -105,7 +108,7 @@ class LedgerRepo:
         if isinstance(e, MarketBar):
             return BarRow(
                 bar_ts=e.bar_ts, symbol=e.symbol, open=e.open, high=e.high,
-                low=e.low, close=e.close, volume=e.volume,
+                low=e.low, close=e.close, volume=e.volume, feed=e.feed,
             )
         if isinstance(e, HaltEvent):
             return HaltRow(ts=e.ts, action="halt", source=e.source, reason=e.reason)

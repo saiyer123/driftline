@@ -26,7 +26,7 @@ def bars_from_csv(path: Path) -> list[MarketBar]:
                 MarketBar(
                     symbol=row["symbol"], open=float(row["open"]), high=float(row["high"]),
                     low=float(row["low"]), close=float(row["close"]),
-                    volume=float(row["volume"]), bar_ts=ts, ts=ts,
+                    volume=float(row["volume"]), bar_ts=ts, ts=ts, feed="replay",
                 )
             )
     bars.sort(key=lambda b: (b.bar_ts, b.symbol))
