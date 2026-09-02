@@ -108,7 +108,7 @@ less unless the data argues otherwise."""
 
 def load_closes(repo: LedgerRepo) -> dict[str, list[float]]:
     closes: dict[str, list[float]] = {}
-    for symbol in live_params.UNIVERSE:
+    for symbol in UNIVERSE:
         bars = repo.daily_bars(symbol, limit=1000)
         if bars:
             closes[symbol] = [b["close"] for b in bars]
@@ -118,12 +118,12 @@ def load_closes(repo: LedgerRepo) -> dict[str, list[float]]:
     return {s: v[-days:] for s, v in closes.items()}
 
 
-def split(closes: dict[str, list[float]], train_frac: float = 0.7):
+def split_index(closes: dict[str, list[float]], train_frac: float = 0.7) -> int:
+    """Index where validation scoring starts. Training metrics use [:cut];
+    validation runs over the FULL series with eval_from=cut, so every
+    candidate warms up naturally and is scored over the identical span."""
     days = min(len(v) for v in closes.values())
-    cut = int(days * train_frac)
-    train = {s: v[:cut] for s, v in closes.items()}
-    valid = {s: v[cut - 70:] for s, v in closes.items()}  # overlap so lookbacks warm up
-    return train, valid
+    return int(days * train_frac)
 
 
 async def run_once() -> Path | None:
@@ -136,13 +136,14 @@ async def run_once() -> Path | None:
     if days < MIN_DAYS:
         log.warning("only %d days of stored bars (< %d) — let the ledger accumulate more history", days, MIN_DAYS)
         return None
-    train, valid = split(closes)
+    cut = split_index(closes)
+    train = {s: v[:cut] for s, v in closes.items()}
 
     current = dict(lookback=live_params.LOOKBACK, top_n=live_params.TOP_N,
                    target_gross=live_params.TARGET_GROSS,
                    rebalance_days=live_params.REBALANCE_DAYS)
     base_train = run_backtest(train, **current)
-    base_valid = run_backtest(valid, **current)
+    base_valid = run_backtest(closes, eval_from=cut, **current)
 
     train_summary = {
         s: {"days": len(v), "total_return": round(v[-1] / v[0] - 1, 4)}
@@ -159,20 +160,28 @@ async def run_once() -> Path | None:
     client = make_client()
     proposals = structured_call(client, SYSTEM, prompt, StrategyProposals)
 
-    rows = []
+    rows, skipped = [], []
     for c in proposals.candidates:
         params = dict(lookback=c.lookback, top_n=c.top_n,
                       target_gross=c.target_gross, rebalance_days=c.rebalance_days)
         t = run_backtest(train, **params)
-        v = run_backtest(valid, **params)
+        v = run_backtest(closes, eval_from=cut, **params)
         if t and v:
             rows.append({"params": params, "hypothesis": c.hypothesis,
                          "train": t.to_dict(), "valid": v.to_dict()})
+        else:
+            skipped.append({"params": params,
+                            "reason": f"lookback {c.lookback} exceeds usable history "
+                                      f"(train {cut}d) — not scored"})
     rows.sort(key=lambda r: r["valid"]["sharpe"], reverse=True)
 
     best = rows[0] if rows else None
+    # a promotion-worthy candidate must be genuinely good, not just less bad:
+    # positive validation Sharpe AND a real margin over the baseline
     beats_baseline = bool(
-        best and base_valid and best["valid"]["sharpe"] > base_valid.sharpe
+        best and base_valid
+        and best["valid"]["sharpe"] > 0
+        and best["valid"]["sharpe"] > base_valid.sharpe + 0.1
     )
 
     CANDIDATES_DIR.mkdir(exist_ok=True)
@@ -182,7 +191,8 @@ async def run_once() -> Path | None:
         "",
         f"Market read: {proposals.market_read}",
         "",
-        f"Stored history: {days} trading days. Walk-forward split 70/30; validation window never shown to Claude.",
+        f"Stored history: {days} trading days; validation = final {days - cut} days, "
+        f"identical for every candidate, never shown to Claude.",
         f"Costs: 5 bps slippage per side of turnover.",
         "",
         "## Baseline (current live parameters)",
@@ -199,6 +209,11 @@ async def run_once() -> Path | None:
             f"- train: `{json.dumps(r['train'])}` | validation: `{json.dumps(r['valid'])}`",
             "",
         ]
+    if skipped:
+        lines += ["## Not scored"]
+        lines += [f"- `{json.dumps(s['params'])}` — {s['reason']}" for s in skipped]
+        lines += [""]
+
     enough_evidence = bool(best and best["valid"]["trading_days"] >= MIN_VALIDATION_DAYS)
     lines += [
         "## Verdict",

@@ -29,12 +29,17 @@ log = logging.getLogger(__name__)
 
 class TradingEngine:
     def __init__(self, bus: EventBus, portfolio: Portfolio, gate: RiskGate,
-                 broker, strategies: list[Strategy], armed: bool = True):
+                 broker, strategies: list[Strategy], armed: bool = True,
+                 wall_clock_rate_limit: bool = False):
         self.bus = bus
         self.portfolio = portfolio
         self.gate = gate
         self.broker = broker
         self.strategies = strategies
+        # replay stamps intents with bar time (all in one wall-clock minute),
+        # so the throttle must use bar time there — but live, bar time makes
+        # every intent share a minute, so the throttle needs the real clock
+        self.wall_clock_rate_limit = wall_clock_rate_limit
         # While not armed (live-mode backfill warm-up), strategies see bars and
         # build state but their OrderIntents are dropped — historical bars must
         # never produce real orders.
@@ -43,10 +48,15 @@ class TradingEngine:
         bus.subscribe(MarketBar, self.on_bar)
         bus.subscribe(Fill, self.on_fill)
 
-    def arm(self) -> None:
-        """End warm-up: allow trading and let strategies reset their cadence."""
+    def arm(self, day_start_equity: float | None = None) -> None:
+        """End warm-up: allow trading and let strategies reset their cadence.
+
+        The daily-loss baseline is today's earliest known equity (from the
+        ledger) when available — falling back to current equity only on the
+        first start of a day, so restarts never refresh the loss budget.
+        """
         self.armed = True
-        self.gate.reset_day(self.portfolio.equity)  # today's baseline = real current equity
+        self.gate.reset_day(day_start_equity or self.portfolio.equity)
         for s in self.strategies:
             s.on_go_live()
         log.info("engine armed: strategies now trade on fresh bars")
@@ -62,6 +72,9 @@ class TradingEngine:
 
         for strategy in self.strategies:
             outputs = strategy.on_bar(bar)
+            if not self.armed:
+                continue  # warm-up: strategies build state, but nothing they
+                          # emit (orders OR journal noise) reaches the ledger
             for out in outputs:
                 if isinstance(out, OrderIntent):
                     await self._handle_intent(out)
@@ -73,7 +86,8 @@ class TradingEngine:
             log.debug("warm-up: dropped %s %s %s", intent.side.value, intent.qty, intent.symbol)
             return
         price = self._price_for(intent.symbol)
-        decision = self.gate.check(intent, price, now=intent.ts)
+        rate_now = None if self.wall_clock_rate_limit else intent.ts
+        decision = self.gate.check(intent, price, now=rate_now)
         if not decision.allowed:
             log.info("VETO %s %s %s: %s", intent.side.value, intent.qty, intent.symbol, decision.reason)
             await self.bus.publish(OrderUpdate(
@@ -100,6 +114,7 @@ class TradingEngine:
     async def snapshot_forever(self, interval_s: int = 60) -> None:
         while True:
             await asyncio.sleep(interval_s)
+            self.portfolio.roll_day()
             self.gate.observe_equity(self.portfolio.equity)
             await self._announce_halt_if_needed()
             await self.publish_snapshots()

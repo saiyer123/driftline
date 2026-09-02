@@ -28,14 +28,15 @@ class SignalStore:
         self.repo = repo
         self.max_age = timedelta(hours=max_age_hours)
 
-    def _fresh(self, kind: str, key: str) -> dict | None:
+    def _fresh(self, kind: str, key: str, max_age: timedelta | None = None) -> dict | None:
+        limit = max_age or self.max_age
         for s in self.repo.latest_signals():
             if s["kind"] == kind and s["key"] == key:
                 ts = datetime.fromisoformat(s["ts"])
                 if ts.tzinfo is None:  # SQLite drops tzinfo; timestamps are stored UTC
                     ts = ts.replace(tzinfo=timezone.utc)
                 age = datetime.now(timezone.utc) - ts
-                return s if age <= self.max_age else None
+                return s if age <= limit else None
         return None
 
     def risk_appetite(self) -> float:
@@ -58,12 +59,7 @@ class SignalStore:
         The tight default freshness window (4 days) is the drift entry window —
         a week-old earnings signal is not an entry, it's history.
         """
-        saved = self.max_age
-        self.max_age = timedelta(hours=max_age_hours)
-        try:
-            s = self._fresh("earnings", symbol)
-        finally:
-            self.max_age = saved
+        s = self._fresh("earnings", symbol, max_age=timedelta(hours=max_age_hours))
         if s is None:
             return None
         return {"score": _clamp(s["value"], TILT_MIN, TILT_MAX), "ts": s["ts"],

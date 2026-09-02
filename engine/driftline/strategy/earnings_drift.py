@@ -44,7 +44,15 @@ class EarningsDrift(Strategy):
         if repo is not None:
             for sym, p in repo.strategy_positions(self.name).items():
                 entered = datetime.fromisoformat(p["last_entry"]).date() if p["last_entry"] else None
-                self.entries[sym] = {"entered": entered, "days_held": 0}
+                # seed the hold clock from stored bars so a deploy mid-hold
+                # doesn't restart the 12-session window from zero
+                days_held = 0
+                if entered is not None:
+                    days_held = sum(
+                        1 for b in repo.daily_bars(sym, limit=HOLD_DAYS * 2)
+                        if b["date"] > entered.isoformat()
+                    )
+                self.entries[sym] = {"entered": entered, "days_held": days_held}
 
     def on_go_live(self) -> None:
         pass  # no cadence state; entries depend only on fresh signals

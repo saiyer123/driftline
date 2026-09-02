@@ -10,10 +10,40 @@ export async function fetchJSON(path) {
   return res.json();
 }
 
-/** Poll an endpoint on an interval, and refetch instantly on live bus events. */
+// ---- one shared WebSocket per tab; hooks subscribe to it ----
+const listeners = new Set();
+let socketStarted = false;
+
+function ensureSocket() {
+  if (socketStarted || typeof window === "undefined") return;
+  socketStarted = true;
+  const connect = () => {
+    let ws;
+    try {
+      ws = new WebSocket(`${API.replace("http", "ws")}/ws`);
+    } catch {
+      setTimeout(connect, 5000);
+      return;
+    }
+    ws.onmessage = (msg) => {
+      let event;
+      try { event = JSON.parse(msg.data); } catch { return; }
+      listeners.forEach((fn) => fn(event));
+    };
+    ws.onclose = () => setTimeout(connect, 3000);
+  };
+  connect();
+}
+
+/** Poll an endpoint on an interval, and refetch instantly on live bus events.
+ *  Effect dependencies are stable strings — a fresh array literal for
+ *  eventTypes must never tear the effect down (that caused a refetch storm). */
 export function useLiveData(path, { intervalMs = 5000, eventTypes = null } = {}) {
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
+  const typesKey = eventTypes ? eventTypes.join(",") : "";
+  const typesRef = useRef(eventTypes);
+  typesRef.current = eventTypes;
 
   const refresh = useCallback(() => {
     fetchJSON(path)
@@ -24,23 +54,14 @@ export function useLiveData(path, { intervalMs = 5000, eventTypes = null } = {})
   useEffect(() => {
     refresh();
     const timer = setInterval(refresh, intervalMs);
-
-    let ws;
-    let alive = true;
-    const connect = () => {
-      ws = new WebSocket(`${API.replace("http", "ws")}/ws`);
-      ws.onmessage = (msg) => {
-        try {
-          const event = JSON.parse(msg.data);
-          if (!eventTypes || eventTypes.includes(event.type)) refresh();
-        } catch { /* ignore malformed frames */ }
-      };
-      ws.onclose = () => { if (alive) setTimeout(connect, 3000); };
+    ensureSocket();
+    const onEvent = (event) => {
+      const types = typesRef.current;
+      if (!types || types.includes(event.type)) refresh();
     };
-    try { connect(); } catch { /* engine offline; polling covers it */ }
-
-    return () => { alive = false; clearInterval(timer); ws?.close(); };
-  }, [path, intervalMs, refresh, eventTypes]);
+    listeners.add(onEvent);
+    return () => { clearInterval(timer); listeners.delete(onEvent); };
+  }, [path, intervalMs, typesKey, refresh]);
 
   return { data, error, refresh };
 }

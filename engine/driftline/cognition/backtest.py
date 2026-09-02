@@ -33,16 +33,25 @@ class BacktestResult:
 
 
 def run_backtest(closes: dict[str, list[float]], lookback: int, top_n: int,
-                 target_gross: float, rebalance_days: int) -> BacktestResult | None:
-    """closes: symbol -> aligned list of daily closes (same length, same dates)."""
+                 target_gross: float, rebalance_days: int,
+                 eval_from: int | None = None) -> BacktestResult | None:
+    """closes: symbol -> aligned list of daily closes (same length, same dates).
+
+    With eval_from set, the strategy still warms up and trades from `lookback`
+    onward, but metrics (returns, drawdown, turnover) only accumulate from that
+    index — so candidates with different lookbacks are scored over the exact
+    same evaluation days, keeping their Sharpes comparable.
+    """
     symbols = sorted(closes)
     days = min(len(closes[s]) for s in symbols)
     if days <= lookback + 5:
         return None
+    start_eval = max(eval_from or lookback, lookback)
+    if days - start_eval < 5:
+        return None
 
     weights = {s: 0.0 for s in symbols}
     equity = 1.0
-    curve = [equity]
     peak = 1.0
     max_dd = 0.0
     rets: list[float] = []
@@ -50,22 +59,25 @@ def run_backtest(closes: dict[str, list[float]], lookback: int, top_n: int,
     last_rebalance = -10**9
 
     for t in range(lookback, days - 1):
+        in_eval = t >= start_eval
         if t - last_rebalance >= rebalance_days:
             momentum = {s: closes[s][t] / closes[s][t - lookback] - 1.0 for s in symbols}
             ranked = sorted(symbols, key=lambda s: momentum[s], reverse=True)
             winners = [s for s in ranked[:top_n] if momentum[s] > 0]
             target = {s: (target_gross / top_n if s in winners else 0.0) for s in symbols}
             turnover = sum(abs(target[s] - weights[s]) for s in symbols)
-            equity *= 1 - turnover * SLIPPAGE_BPS / 10_000
-            turnover_total += turnover
+            if in_eval:
+                equity *= 1 - turnover * SLIPPAGE_BPS / 10_000
+                turnover_total += turnover
             weights = target
             last_rebalance = t
+        if not in_eval:
+            continue
         day_ret = sum(
             weights[s] * (closes[s][t + 1] / closes[s][t] - 1.0) for s in symbols
         )
         equity *= 1 + day_ret
         rets.append(day_ret)
-        curve.append(equity)
         peak = max(peak, equity)
         max_dd = max(max_dd, (peak - equity) / peak)
 

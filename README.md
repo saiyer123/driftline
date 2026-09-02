@@ -12,7 +12,7 @@ three-plane design this repo implements.
 ```bash
 cd engine
 uv sync
-uv run pytest -q                                  # 24 tests
+uv run pytest -q
 uv run python scripts/make_replay_csv.py          # synthetic daily bars
 uv run python -m driftline.runner --replay replay-bars.csv
 ```

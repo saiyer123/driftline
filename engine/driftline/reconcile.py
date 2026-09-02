@@ -38,10 +38,14 @@ class Reconciler:
                 log.exception("reconcile pass failed; will retry")
 
     async def check_once(self) -> list[str]:
+        broker_state = await self.broker.account_state()
+        # broker-reported equity is live intraday — feeding it to the gate makes
+        # the daily-loss halt a real intraday check instead of close-to-close
+        # (the engine's snapshot loop announces any resulting halt within 60s)
+        self.gate.observe_equity(broker_state["equity"])
         if getattr(self.broker, "has_open_orders", False):
             log.info("reconcile skipped: orders in flight (fills may not be ingested yet)")
             return []
-        broker_state = await self.broker.account_state()
         problems: list[str] = []
 
         ours = {s: p.qty for s, p in self.portfolio.positions.items() if abs(p.qty) > QTY_TOLERANCE}

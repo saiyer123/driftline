@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 from alpaca.data.historical import StockHistoricalDataClient
 from alpaca.data.requests import StockBarsRequest
@@ -21,14 +22,17 @@ from ..core.events import MarketBar
 
 log = logging.getLogger(__name__)
 
-SESSION_CLOSE_UTC = 20  # 4pm ET (winter 21:00; being an hour early only delays a bar)
+NY = ZoneInfo("America/New_York")
 
 
 def is_bar_complete(bar_ts: datetime, now: datetime) -> bool:
     """Only completed daily bars feed strategies — an in-progress session's bar
-    changes all day and would have the system deciding on partial data."""
-    close = bar_ts.replace(hour=SESSION_CLOSE_UTC, minute=5, second=0, microsecond=0)
-    return now >= close
+    changes all day and would have the system deciding on partial data.
+    The session closes 16:00 America/New_York; comparing in that zone keeps
+    this correct across DST (a fixed UTC hour would publish partial bars all
+    winter). Early-close days resolve later than necessary, which is safe."""
+    close_ny = bar_ts.astimezone(NY).replace(hour=16, minute=5, second=0, microsecond=0)
+    return now.astimezone(NY) >= close_ny
 
 
 class AlpacaFeed:

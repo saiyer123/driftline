@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import JSON, DateTime, Float, Integer, String, Text
+from sqlalchemy import JSON, DateTime, Float, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -95,6 +95,7 @@ class SignalRow(Base):
 
 class BarRow(Base):
     __tablename__ = "bars"
+    __table_args__ = (UniqueConstraint("symbol", "bar_ts", name="uq_bars_symbol_ts"),)
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     bar_ts: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
     symbol: Mapped[str] = mapped_column(String(16), index=True)

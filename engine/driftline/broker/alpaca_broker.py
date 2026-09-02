@@ -89,21 +89,31 @@ class AlpacaBroker:
 
     # -- open-order tracking ---------------------------------------------------
 
-    async def adopt_open_orders(self) -> int:
-        """Re-adopt open orders left by a previous run (e.g. after a restart)."""
+    async def adopt_open_orders(self, repo=None) -> int:
+        """Re-adopt open orders left by a previous run (e.g. after a restart).
+
+        client_order_id is our intent_id, so the ledger can restore each
+        order's strategy attribution instead of tagging fills "unknown".
+        """
         req = GetOrdersRequest(status=QueryOrderStatus.OPEN)
         orders = await asyncio.to_thread(self.client.get_orders, req)
         for o in orders:
             oid = str(o.id)
             if oid in self._open:
                 continue
+            intent_id = str(o.client_order_id or oid)
+            strategy, version = ("unknown", "unknown")
+            if repo is not None:
+                attributed = repo.intent_strategy(intent_id)
+                if attributed:
+                    strategy, version = attributed
             self._open[oid] = _TrackedOrder(
                 broker_order_id=oid,
-                intent_id=str(o.client_order_id or oid),
+                intent_id=intent_id,
                 symbol=o.symbol,
                 side=Side.BUY if str(o.side.value if hasattr(o.side, "value") else o.side) == "buy" else Side.SELL,
                 qty=float(o.qty or 0),
-                strategy="unknown", strategy_version="unknown",
+                strategy=strategy, strategy_version=version,
             )
             log.info("adopted open order %s from a previous run (%s %s %s)",
                      oid, self._open[oid].side.value, self._open[oid].qty, o.symbol)
@@ -132,19 +142,23 @@ class AlpacaBroker:
             return []
         del self._open[oid]
         common = tracked.common()
+        filled_qty = float(order.filled_qty or 0)
+        fill_price = float(order.filled_avg_price or 0)
+        events: list[Event] = []
+        # a canceled/expired DAY order may still have partially filled — those
+        # shares traded and the ledger must know, whatever the final status
+        if filled_qty > 0 and fill_price > 0:
+            events.append(Fill(broker_order_id=oid, price=fill_price, fee=0.0,
+                               **{**common, "qty": filled_qty}))
         if status == "filled":
-            filled_qty = float(order.filled_qty or 0)
-            fill_price = float(order.filled_avg_price or 0)
             log.info("order %s filled: %s %s @ %s", oid, tracked.side.value, filled_qty, fill_price)
-            return [
-                OrderUpdate(broker_order_id=oid, status=OrderStatus.FILLED, **common),
-                Fill(broker_order_id=oid, price=fill_price, fee=0.0,
-                     **{**common, "qty": filled_qty}),
-            ]
-        mapped = OrderStatus.CANCELED if status in ("canceled", "expired") else OrderStatus.REJECTED
-        log.info("order %s ended %s", oid, status)
-        return [OrderUpdate(broker_order_id=oid, status=mapped,
-                            reason=f"alpaca status: {status}", **common)]
+            events.append(OrderUpdate(broker_order_id=oid, status=OrderStatus.FILLED, **common))
+        else:
+            mapped = OrderStatus.CANCELED if status in ("canceled", "expired") else OrderStatus.REJECTED
+            log.info("order %s ended %s (%s/%s filled)", oid, status, filled_qty, tracked.qty)
+            events.append(OrderUpdate(broker_order_id=oid, status=mapped,
+                                      reason=f"alpaca status: {status}", **common))
+        return events
 
     # -- reconciliation reads --------------------------------------------------
 

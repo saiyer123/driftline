@@ -85,9 +85,10 @@ async def run_live() -> None:
     from .strategy.watchlist import WATCHLIST
     signals = SignalStore(repo)
     engine = TradingEngine(bus, portfolio, gate, broker,
-                           [BaselineMomentum(portfolio, signals=signals),
+                           [BaselineMomentum(portfolio, signals=signals, repo=repo),
                             EarningsDrift(portfolio, signals=signals, repo=repo)],
-                           armed=False)  # warm-up: no orders from historical bars
+                           armed=False,  # warm-up: no orders from historical bars
+                           wall_clock_rate_limit=True)
     feed = AlpacaFeed(settings, bus, UNIVERSE + WATCHLIST)
     reconciler = Reconciler(bus, portfolio, gate, broker)
     app = build_app(bus, repo, portfolio, gate)
@@ -96,11 +97,19 @@ async def run_live() -> None:
     log.info("driftline live paper mode: equity $%.2f, %d position(s); API on http://%s:%d",
              state["equity"], len(state["positions"]), settings.api_host, settings.api_port)
 
-    adopted = await broker.adopt_open_orders()
+    # a halt with no later resume survives restarts — systemd's Restart=always
+    # must never clear a daily-loss or reconciliation halt on its own
+    open_halt = repo.open_halt()
+    if open_halt:
+        gate.halt(f"persisted from previous run [{open_halt['source']}]: {open_halt['reason']}")
+        log.warning("starting HALTED (unresolved halt from previous run): %s", open_halt["reason"])
+
+    adopted = await broker.adopt_open_orders(repo=repo)
     if adopted:
         log.info("tracking %d open order(s) from a previous run", adopted)
     await feed.backfill()
-    engine.arm()
+    from datetime import datetime, timezone
+    engine.arm(day_start_equity=repo.day_start_equity(datetime.now(timezone.utc).date().isoformat()))
     await engine.publish_snapshots()
     await asyncio.gather(
         feed.poll_forever(),

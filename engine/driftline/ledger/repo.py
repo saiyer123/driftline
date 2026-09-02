@@ -44,15 +44,29 @@ class LedgerRepo:
         with self.engine.connect() as conn:
             conn.execute(text("PRAGMA journal_mode=WAL"))
         Base.metadata.create_all(self.engine)
+        # migrate pre-constraint databases: drop duplicate bars, then enforce
+        # uniqueness so warm-up re-backfills stop re-persisting history
+        with self.engine.begin() as conn:
+            conn.execute(text(
+                "DELETE FROM bars WHERE id NOT IN "
+                "(SELECT MIN(id) FROM bars GROUP BY symbol, bar_ts)"
+            ))
+            conn.execute(text(
+                "CREATE UNIQUE INDEX IF NOT EXISTS uq_bars_symbol_ts ON bars (symbol, bar_ts)"
+            ))
 
     # -- bus handler ---------------------------------------------------------
 
     async def on_event(self, event: Event) -> None:
+        from sqlalchemy.exc import IntegrityError
         with Session(self.engine) as s:
             row = self._row_for(event)
             if row is not None:
-                s.add(row)
-                s.commit()
+                try:
+                    s.add(row)
+                    s.commit()
+                except IntegrityError:
+                    s.rollback()  # duplicate bar from a warm-up re-backfill
 
     def _row_for(self, e: Event):
         if isinstance(e, OrderUpdate):
@@ -268,6 +282,48 @@ class LedgerRepo:
             else:
                 p["qty"] -= r.qty
         return {sym: p for sym, p in out.items() if p["qty"] > 1e-9}
+
+    def intent_strategy(self, intent_id: str) -> tuple[str, str] | None:
+        """(strategy, strategy_version) that submitted an intent, from orders."""
+        with Session(self.engine) as s:
+            row = s.scalars(
+                select(OrderRow).where(OrderRow.intent_id == intent_id)
+                .order_by(OrderRow.ts).limit(1)
+            ).first()
+        return (row.strategy, row.strategy_version) if row else None
+
+    def last_decision(self, strategy: str) -> dict | None:
+        """Most recent decision journal entry for a strategy (ts, text, payload)."""
+        with Session(self.engine) as s:
+            row = s.scalars(
+                select(JournalRow)
+                .where(JournalRow.strategy == strategy, JournalRow.kind == "decision")
+                .order_by(JournalRow.ts.desc()).limit(1)
+            ).first()
+        if row is None:
+            return None
+        return {"ts": row.ts.isoformat(), "text": row.text, "payload": row.payload}
+
+    def open_halt(self) -> dict | None:
+        """The latest halt if it has no later resume — a restart must honor it."""
+        rows = self.halts(limit=1)
+        if rows and rows[0]["action"] == "halt":
+            return rows[0]
+        return None
+
+    def day_start_equity(self, day_iso: str) -> float | None:
+        """First equity snapshot of the given UTC day — the daily-loss baseline.
+
+        Restarting mid-day must not reset the loss budget to current equity.
+        """
+        with Session(self.engine) as s:
+            rows = s.scalars(
+                select(EquitySnapshotRow).order_by(EquitySnapshotRow.ts)
+            ).all()
+        for r in rows:
+            if r.ts.date().isoformat() == day_iso:
+                return r.equity
+        return None
 
     def halts(self, limit: int = 50) -> list[dict]:
         with Session(self.engine) as s:

@@ -49,6 +49,11 @@ class Portfolio:
             self._pnl_day = ts.date()
             self.realized_pnl_today = 0.0
 
+    def roll_day(self, now: datetime | None = None) -> None:
+        """Roll realized-P&L-today on the clock, not only on the next fill —
+        otherwise a quiet day shows yesterday's realized number all day."""
+        self._roll_day(now or datetime.now(timezone.utc))
+
     def apply_fill(self, fill: Fill) -> None:
         self._roll_day(fill.ts)
         pos = self._position(fill.symbol)
