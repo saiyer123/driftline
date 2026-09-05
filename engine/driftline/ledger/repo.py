@@ -341,17 +341,21 @@ class LedgerRepo:
             qty[r.symbol] = qty.get(r.symbol, 0.0) + (r.qty if r.side == "buy" else -r.qty)
         return {s_: q for s_, q in qty.items() if abs(q) > 1e-9}
 
-    def last_decision(self, strategy: str) -> dict | None:
-        """Most recent decision journal entry for a strategy (ts, text, payload)."""
+    def last_journal(self, strategy: str, kind: str) -> dict | None:
+        """Most recent journal entry of a kind for a strategy (ts, text, payload)."""
         with Session(self.engine) as s:
             row = s.scalars(
                 select(JournalRow)
-                .where(JournalRow.strategy == strategy, JournalRow.kind == "decision")
-                .order_by(JournalRow.ts.desc()).limit(1)
+                .where(JournalRow.strategy == strategy, JournalRow.kind == kind)
+                .order_by(JournalRow.id.desc()).limit(1)
             ).first()
         if row is None:
             return None
         return {"ts": row.ts.isoformat(), "text": row.text, "payload": row.payload}
+
+    def last_decision(self, strategy: str) -> dict | None:
+        """Most recent decision journal entry for a strategy (ts, text, payload)."""
+        return self.last_journal(strategy, "decision")
 
     def open_halt(self) -> dict | None:
         """The latest halt if it has no later resume — a restart must honor it."""
