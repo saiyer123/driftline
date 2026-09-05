@@ -33,7 +33,8 @@ class OrderStatus(str, Enum):
     FILLED = "filled"
     CANCELED = "canceled"
     REJECTED = "rejected"
-    VETOED = "vetoed"  # killed by the risk gate; never reached the broker
+    VETOED = "vetoed"    # killed by the risk gate; never reached the broker
+    APPROVED = "approved"  # gate-approved and persisted; about to be sent to the broker
 
 
 @dataclass

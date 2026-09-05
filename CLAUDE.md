@@ -66,3 +66,13 @@ refuses to start unless `ALPACA_PAPER=true`.
   add new event types there and persist them in `ledger/repo.py`.
 - Money is float dollars in phase 1; timestamps are timezone-aware UTC everywhere.
 - The ledger is append-only; state is derived, never updated in place.
+
+## Shared engine (2026-09-05 consolidation)
+
+Engine code (core/, risk/, broker/, data/, ledger/, portfolio/, reconcile.py, trading.py,
+runner.py, api/) is byte-identical across the three Driftline platforms; the reference copy
+lives in the Architect repo and this repo's own fixes were ported there first. Strategies are
+selected via `strategy/registry.py` (`runner --strategies`). Halt semantics: a `daily_loss`
+halt blocks new risk but lets position-reducing sells through (owner-authorized); `reconcile`/
+`infra`/`manual` halts block everything. Pending orders are reserved in the gate until terminal.
+Approvals are persisted before the broker call; a ledger write failure halts the engine.

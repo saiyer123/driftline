@@ -61,15 +61,23 @@ class LedgerRepo:
     # -- bus handler ---------------------------------------------------------
 
     async def on_event(self, event: Event) -> None:
+        self.record(event)
+
+    def record(self, event: Event) -> None:
+        """Persist one event synchronously (also used for ledger-only writes that
+        must not go through the bus, e.g. fills already reflected in a
+        broker-seeded portfolio). Raises on write failure — the bus marks this
+        handler critical so the engine halts instead of trading blind."""
         from sqlalchemy.exc import IntegrityError
+        row = self._row_for(event)
+        if row is None:
+            return
         with Session(self.engine) as s:
-            row = self._row_for(event)
-            if row is not None:
-                try:
-                    s.add(row)
-                    s.commit()
-                except IntegrityError:
-                    s.rollback()  # duplicate bar from a warm-up re-backfill
+            try:
+                s.add(row)
+                s.commit()
+            except IntegrityError:
+                s.rollback()  # duplicate bar from a warm-up re-backfill
 
     def _row_for(self, e: Event):
         if isinstance(e, OrderUpdate):
@@ -199,23 +207,38 @@ class LedgerRepo:
         ]
 
     def attribution(self) -> list[dict]:
-        """Realized cashflow per (strategy, strategy_version): sells minus buys minus fees.
-
-        For open positions this is cashflow, not final P&L — the dashboard pairs
-        it with live unrealized P&L from positions.
-        """
+        """Per (strategy, strategy_version): realized P&L (average-cost), fees,
+        fill count, and the open quantity per symbol so the API can add
+        unrealized P&L at current marks. Cash flow alone is not profit."""
         with Session(self.engine) as s:
-            rows = s.scalars(select(FillRow)).all()
+            rows = s.scalars(select(FillRow).order_by(FillRow.ts)).all()
         agg: dict[tuple[str, str], dict] = {}
         for r in rows:
             key = (r.strategy, r.strategy_version)
             a = agg.setdefault(key, {"strategy": r.strategy, "strategy_version": r.strategy_version,
-                                     "cashflow": 0.0, "fees": 0.0, "fills": 0})
-            signed = r.qty * r.price * (1 if r.side == "sell" else -1)
-            a["cashflow"] += signed - r.fee
+                                     "realized": 0.0, "fees": 0.0, "fills": 0, "cashflow": 0.0,
+                                     "open": {}})  # symbol -> {"qty", "avg"}
+            pos = a["open"].setdefault(r.symbol, {"qty": 0.0, "avg": 0.0})
+            if r.side == "buy":
+                total = pos["avg"] * pos["qty"] + r.price * r.qty
+                pos["qty"] += r.qty
+                pos["avg"] = total / pos["qty"] if pos["qty"] else 0.0
+                a["cashflow"] -= r.price * r.qty
+            else:
+                sold = min(r.qty, pos["qty"]) if pos["qty"] > 0 else r.qty
+                a["realized"] += (r.price - pos["avg"]) * sold
+                pos["qty"] = max(pos["qty"] - r.qty, 0.0)
+                if pos["qty"] <= 1e-9:
+                    pos["qty"], pos["avg"] = 0.0, 0.0
+                a["cashflow"] += r.price * r.qty
+            a["realized"] -= r.fee
             a["fees"] += r.fee
             a["fills"] += 1
-        return sorted(agg.values(), key=lambda a: a["cashflow"], reverse=True)
+        out = []
+        for a in agg.values():
+            a["open"] = {sym: p for sym, p in a["open"].items() if p["qty"] > 1e-9}
+            out.append(a)
+        return sorted(out, key=lambda a: a["realized"], reverse=True)
 
     def latest_signals(self) -> list[dict]:
         """Most recent signal per (kind, key)."""
@@ -294,6 +317,29 @@ class LedgerRepo:
                 .order_by(OrderRow.ts).limit(1)
             ).first()
         return (row.strategy, row.strategy_version) if row else None
+
+    def non_terminal_intents(self, limit: int = 200) -> list[dict]:
+        """Intents whose latest order row is approved/submitted/accepted — orders
+        the broker may have finished while the engine was down."""
+        with Session(self.engine) as s:
+            rows = s.scalars(select(OrderRow).order_by(OrderRow.id)).all()  # insertion order, not ts:
+        latest: dict[str, OrderRow] = {}                                     # intents carry bar time,
+        for r in rows:                                                       # updates carry wall time
+            latest[r.intent_id] = r
+        open_states = {"approved", "submitted", "accepted", "partially_filled"}
+        out = [{"intent_id": r.intent_id, "symbol": r.symbol, "side": r.side, "qty": r.qty,
+                "strategy": r.strategy, "strategy_version": r.strategy_version, "ts": r.ts.isoformat()}
+               for r in latest.values() if r.status in open_states]
+        return out[-limit:]
+
+    def ledger_positions(self) -> dict[str, float]:
+        """Net quantity per symbol implied by every recorded fill."""
+        with Session(self.engine) as s:
+            rows = s.scalars(select(FillRow)).all()
+        qty: dict[str, float] = {}
+        for r in rows:
+            qty[r.symbol] = qty.get(r.symbol, 0.0) + (r.qty if r.side == "buy" else -r.qty)
+        return {s_: q for s_, q in qty.items() if abs(q) > 1e-9}
 
     def last_decision(self, strategy: str) -> dict | None:
         """Most recent decision journal entry for a strategy (ts, text, payload)."""

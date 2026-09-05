@@ -3,6 +3,16 @@
 The only component allowed to call a broker, and it only ever does so with a
 gate-approved intent. Also emits position/equity snapshots after fills and on
 a timer, and keeps the gate's daily-loss tracking fed.
+
+Order path, in order, for every approved intent:
+  1. gate.check                      (limits, incl. what is already pending)
+  2. gate.reserve                    (cash / exposure / sellable qty held)
+  3. OrderUpdate(APPROVED) persisted (durable record BEFORE the broker call;
+                                      if the ledger cannot write, the engine
+                                      halts and the order is not sent)
+  4. broker.submit                   (SUBMITTED / REJECTED, or resolved by
+                                      client order id after an ambiguous error)
+  5. a terminal OrderUpdate later releases the reservation
 """
 
 from __future__ import annotations
@@ -10,7 +20,7 @@ from __future__ import annotations
 import asyncio
 import logging
 
-from .core.bus import EventBus
+from .core.bus import CriticalHandlerError, EventBus
 from .core.events import (
     Event,
     Fill,
@@ -25,6 +35,8 @@ from .risk.gate import RiskGate
 from .strategy.base import Strategy
 
 log = logging.getLogger(__name__)
+
+TERMINAL = {OrderStatus.FILLED, OrderStatus.CANCELED, OrderStatus.REJECTED, OrderStatus.VETOED}
 
 
 class TradingEngine:
@@ -47,6 +59,7 @@ class TradingEngine:
         self._halt_announced = False
         bus.subscribe(MarketBar, self.on_bar)
         bus.subscribe(Fill, self.on_fill)
+        bus.subscribe(OrderUpdate, self.on_order_update)
 
     def arm(self, day_start_equity: float | None = None) -> None:
         """End warm-up: allow trading and let strategies reset their cadence.
@@ -88,21 +101,46 @@ class TradingEngine:
         price = self._price_for(intent.symbol)
         rate_now = None if self.wall_clock_rate_limit else intent.ts
         decision = self.gate.check(intent, price, now=rate_now)
+        common = dict(intent_id=intent.intent_id, symbol=intent.symbol, side=intent.side,
+                      qty=intent.qty, strategy=intent.strategy,
+                      strategy_version=intent.strategy_version, ts=intent.ts)
         if not decision.allowed:
             log.info("VETO %s %s %s: %s", intent.side.value, intent.qty, intent.symbol, decision.reason)
-            await self.bus.publish(OrderUpdate(
-                intent_id=intent.intent_id, broker_order_id="", symbol=intent.symbol,
-                side=intent.side, qty=intent.qty, status=OrderStatus.VETOED,
-                strategy=intent.strategy, strategy_version=intent.strategy_version,
-                reason=decision.reason, ts=intent.ts,
-            ))
+            await self.bus.publish(OrderUpdate(broker_order_id="", status=OrderStatus.VETOED,
+                                               reason=decision.reason, **common))
             await self._announce_halt_if_needed()
             return
+
+        # reserve, then make the approval durable before anything crosses the
+        # broker boundary — a ledger failure here halts and sends nothing
+        self.gate.reserve(intent, price)
+        try:
+            await self.bus.publish(OrderUpdate(broker_order_id="", status=OrderStatus.APPROVED,
+                                               reason=f"gate approved @ {price:.4f}", **common))
+        except CriticalHandlerError as exc:
+            self.gate.release(intent.intent_id)
+            self.gate.halt(f"ledger write failed before order submission: {exc}", kind="infra")
+            log.error("ledger failure — halting; %s %s %s NOT sent", intent.side.value, intent.qty, intent.symbol)
+            await self._announce_halt_if_needed()
+            return
+
         events = await self.broker.submit(intent, price)
-        await self.bus.publish_many(events)
+        try:
+            await self.bus.publish_many(events)
+        except CriticalHandlerError as exc:
+            # the order may be live at the broker; the reservation stays until the
+            # poller resolves it, but no further orders go out on a broken ledger
+            self.gate.halt(f"ledger write failed after order submission: {exc}", kind="infra")
+            await self._announce_halt_if_needed()
+
+    async def on_order_update(self, event: Event) -> None:
+        upd: OrderUpdate = event  # type: ignore[assignment]
+        if upd.status in TERMINAL:
+            self.gate.release(upd.intent_id)
 
     async def on_fill(self, event: Event) -> None:
         fill: Fill = event  # type: ignore[assignment]
+        self.gate.consume(fill.intent_id, fill.qty)
         self.portfolio.apply_fill(fill)
         await self.publish_snapshots(ts=fill.ts)
 
@@ -122,7 +160,8 @@ class TradingEngine:
     async def _announce_halt_if_needed(self) -> None:
         if self.gate.halted and not self._halt_announced:
             self._halt_announced = True
-            await self.bus.publish(HaltEvent(source="risk_gate", reason=self.gate.halt_reason))
+            await self.bus.publish(HaltEvent(source=self.gate.halt_kind or "risk_gate",
+                                             reason=self.gate.halt_reason))
         elif not self.gate.halted:
             self._halt_announced = False
 

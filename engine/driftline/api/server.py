@@ -44,7 +44,7 @@ def build_app(bus: EventBus, repo: LedgerRepo, portfolio: Portfolio, gate: RiskG
     app = FastAPI(title="driftline")
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+        allow_origins=[f"http://{h}:{p}" for h in ("localhost", "127.0.0.1") for p in (3000, 3001, 3002)],
         allow_methods=["*"],
         allow_headers=["*"],
     )
@@ -93,7 +93,20 @@ def build_app(bus: EventBus, repo: LedgerRepo, portfolio: Portfolio, gate: RiskG
 
     @app.get("/attribution")
     def attribution() -> list[dict]:
-        return repo.attribution()
+        """Realized P&L from the ledger plus unrealized P&L on what each strategy
+        version still holds, marked at the engine's current prices."""
+        rows = repo.attribution()
+        for r in rows:
+            unreal = 0.0
+            for sym, o in r["open"].items():
+                pos = portfolio.positions.get(sym)
+                mark = pos.mark if pos and pos.mark else o["avg"]
+                unreal += (mark - o["avg"]) * o["qty"]
+            r["unrealized"] = unreal
+            r["total"] = r["realized"] + unreal
+            r["open_symbols"] = ", ".join(f"{s} {o['qty']:g}" for s, o in r["open"].items())
+            r.pop("open", None)
+        return sorted(rows, key=lambda r: r["total"], reverse=True)
 
     @app.get("/halts")
     def halts() -> list[dict]:
